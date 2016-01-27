@@ -91,7 +91,17 @@ CREATE TABLE "patches" (
 	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER',
 	`flags`	TEXT
 );
+INSERT INTO "patches" VALUES(1,'bash','http','www.linuxfromscratch.org/patches/lfs/7.8','bash-','4.3.30','-upstream_fixes-2.patch','http://wiki.linuxfromscratch.org/lfs/ticket/3789','NEVER','N');
+INSERT INTO "patches" VALUES(2,'bc','http','www.linuxfromscratch.org/patches/lfs/7.8','bc-','1.06.95','-memory_leak-1.patch','Fixes memory leaks and an uninitialized variable','NEVER','N');
+INSERT INTO "patches" VALUES(3,'bzip2','http','www.linuxfromscratch.org/patches/lfs/7.8','bzip2-','1.0.6','-install_docs-1.patch','Installs pre-formatted documentation','NEVER','N');
+INSERT INTO "patches" VALUES(4,'coreutils','http','www.linuxfromscratch.org/patches/lfs/7.8','coreutils-','8.24','-i18n-1.patch','Fixes several i18n issues with various Coreutils programs','NEVER','N');
+INSERT INTO "patches" VALUES(5,'glibc','http','www.linuxfromscratch.org/patches/lfs/7.8','glibc-','2.22','-fhs-1.patch','removes references to /var/db dir (not part of FHS), replaces with refs to /var/cache/{nscd,nss_db}','NEVER','N');
+INSERT INTO "patches" VALUES(6,'glibc','http','www.linuxfromscratch.org/patches/lfs/7.8','glibc-','2.22','-upstream_i386_fix-1.patch','This patch fixes a build problem on 32-bit systems','NEVER','N');
+INSERT INTO "patches" VALUES(7,'kbd','http','www.linuxfromscratch.org/patches/lfs/7.8','kbd-','2.0.3','-backspace-1.patch','Makes Backspace and Delete keys consistent in all i386 keymaps','NEVER','N');
+INSERT INTO "patches" VALUES(8,'mpfr','http','www.linuxfromscratch.org/patches/lfs/7.8','mpfr-','3.1.3','-upstream_fixes-1.patch','contains bug fixes identified upstream','NEVER','N');
+INSERT INTO "patches" VALUES(9,'readline','http','www.linuxfromscratch.org/patches/lfs/7.8','readline-','6.3','-upstream_fixes-3.patch','upstream patch numbers 001 through 008','NEVER','N');
+INSERT INTO "patches" VALUES(10,'sysvinit','http','www.linuxfromscratch.org/patches/lfs/7.8','sysvinit-','2.88dsf','-consolidated-1.patch','(LFS-specific stuff, it looks like)','NEVER','N');
 DELETE FROM sqlite_sequence;
 INSERT INTO "sqlite_sequence" VALUES('sources',67);
-INSERT INTO "sqlite_sequence" VALUES('patches',0);
+INSERT INTO "sqlite_sequence" VALUES('patches',10);
 COMMIT;
