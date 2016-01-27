@@ -1,0 +1,6 @@
+This software requires the following:
+-Python3.x (and the following modules which should be a part of most operating systems' installations)
+--sqlite3
+--semantic_version
+-sqlite3 (optional; only needed if manually adding/removing/modifying sources list)
+-rsync (optional; only needed if uploading to a remote host)
