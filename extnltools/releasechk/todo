@@ -1,0 +1,8 @@
+12:22:22 <@RainbowHash> so that our SRC directory has a tree nthAT MATCches where the porograms are installed. for example, once SRC is checked out, you'll have ./src/usr/bin/file
+12:22:43 <@RainbowHash> and inside that folder, there's all the shit for file that was in the original file tarball
+12:23:49 <@RainbowHash> i think once we actually complete that refactor, it'll make things much easier going forward
+12:25:01 <@RainbowHash> that'll also help us prepare to move to being self-hosting
+12:25:58 <@RainbowHash> eventually, installs will be able to run something a la makeworld build; makeworld install and do an inplace install, or makeworld build; makeworld release to build a release tarball from whatever src branch they have
+12:27:22 < r00t^2> hrm.. interesting. so they could snapshot their personal base, is what you're saying?
+12:27:57 <@RainbowHash> it'd move us more in line with how freebsd does things, and keep track of what goes where in Base better
+
