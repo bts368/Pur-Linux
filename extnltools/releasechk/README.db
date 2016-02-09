@@ -264,11 +264,14 @@ _______________________________________________________________________________
 |	A	Always		Like 'a', but never removed (persistent).     |
 |		Anomalous						      |
 |									      |
+<<<<<<< HEAD
 |	b	Base64		Source is in base64.			      |
 |				  Removed on next run.			      |
 |									      |
 |	B	Always Base64	Like 'b', but never removed (persistent).     |
 |									      |
+=======
+>>>>>>> 3409967a832e3233ca5b645817ffa0e5427fd7a1
 |	c	Check Only	Only check for a new version (and if found,   |
 |				  update the version in the DB); do not fetch.|
 |				  Removed on next run.			      |
