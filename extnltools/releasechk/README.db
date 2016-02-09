@@ -264,14 +264,11 @@ _______________________________________________________________________________
 |	A	Always		Like 'a', but never removed (persistent).     |
 |		Anomalous						      |
 |									      |
-<<<<<<< HEAD
 |	b	Base64		Source is in base64.			      |
 |				  Removed on next run.			      |
 |									      |
 |	B	Always Base64	Like 'b', but never removed (persistent).     |
 |									      |
-=======
->>>>>>> 3409967a832e3233ca5b645817ffa0e5427fd7a1
 |	c	Check Only	Only check for a new version (and if found,   |
 |				  update the version in the DB); do not fetch.|
 |				  Removed on next run.			      |
@@ -283,7 +280,7 @@ _______________________________________________________________________________
 |				  (e.g. '1.2.3.4' instead of '1.2.3').	      |
 |				  Removed on next run.			      |
 |									      |
-|	S	Always Extra	Like 's', but never removed (persistent).     |
+|	E	Always Extra	Like 's', but never removed (persistent).     |
 |									      |
 |	f	Fetch Only	Only fetch the current source, do not check   |
 |				  for a new version (only "last_fetched" will |
@@ -332,3 +329,73 @@ _______________________________________________________________________________
 _______________________________________________________________________________
 
 
+
+C. Prioritization
+
+In order to avoid conflicts, flags have certain priorities. The flags are
+given the following "weight"- in other words, the lower a number, the higher
+the priority. Higher priority flags take precedence over lower priorty if a
+conflict occurs.
+
+O = 0
+o = 1
+N = 2
+n = 3
+A = 4
+a = 5
+C = 6
+c = 7
+F = 8
+f = 9
+M = 10
+m = 11
+E = 12
+e = 13
+S = 14
+s = 15
+X = 16
+x = 17
+B = 18
+b = 19
+
+e.g. The flags 'Ncf' will lead to nothing being done for that source, ever-
+     because the 'N' flag overrides all the other flags (and has a "do nothing"
+     behaviour), so it acts as if you just specified 'N'.
+
+     The flags 'CF' will always mean the source is only checked and never
+     fetched- because 'C' has a heavier weight than 'F', even though you
+     specified both checking and fetching (remember, they flag for doing ONLY
+     an action).
+
+
+D. Implication
+
+"Now, hold on! What happens if I do 'Nn' as flags?" Well, aside from the
+weighted system above, the obvious result is that there is inherent
+implication. In other words,
+
+
+   __________ will always imply _______________.
+
+	O				o
+	N				n
+	A				a
+	C				c
+	F				f
+	M				m
+	E				e
+	S				s
+	X				x
+	B				b
+
+
+Additionally, due to current implementation, certain flags are *indirectly*
+implied because their action includes the action of another flag.
+
+
+   __________ will always imply _______________.
+
+	O				N
+	o				n
+	A				N
+	a				n
