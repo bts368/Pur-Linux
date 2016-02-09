@@ -75,6 +75,20 @@ _______________________________________________________________________________
 	`comment`	TEXT,
 	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER'
    );
+   CREATE TABLE "checksums" (
+	`id`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`package`	TEXT NOT NULL,
+	`type`		TEXT NOT NULL DEFAULT 'sources',
+	`protocol`	TEXT,
+	`urlbase`	TEXT,
+	`file_prefix`	TEXT,
+	`version`	TEXT NOT NULL,
+	`suffix`	TEXT,
+	`hash`		TEXT,
+	`algo`		TEXT NOT NULL DEFAULT 'md5',
+	`comment`	TEXT,
+	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER'
+   );
    COMMIT;
 _______________________________________________________________________________
 
@@ -127,4 +141,191 @@ e. "file_prefix"
    configuration).
 
 f. "version"
-   The actual version string. This may be updated on 
+   The actual version string. This may be updated on successful fetch/check/
+   etc. (depending on flags).
+   e.g. Original URL: http://www.domain.tld/dir/subdir/filename-1.2.3.tar.gz
+        version: 1.2.3
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: Should ideally only consist of numbers and period separators.
+   If in a nonstandard version (e.g. tzdata, "YYYY[a-z]", you should use the
+   'N' flag. Future versions will include support for hyphenated/underscore
+   separators as well.
+
+g. "suffix"
+   The part of the filename after the version.
+   e.g. Original URL: http://www.domain.tld/dir/subdir/filename-1.2.3.tar.gz
+        suffix: .tar.gz
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: May be case-sensitive (depending on server's configuration).
+
+h. "comment"
+   Notes on the particular resource for that row.
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: Optional. Freeform; any text in allowed charset is OK.
+
+i. "last_fetched"
+   Depending on flags, the date of the last successful check, the last
+   successful fetch, or the latest of either (or neither if 'N'/'n' etc. are
+   specified as flags). If never checked/fetched/etc., then 'NEVER' will be
+   used (this is the default entry).
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: If not 'NEVER', it will use 'Unix Epoch Time'.
+
+j. "flags"
+   Additional options controlling fetching of the resource. See "III. Flags".
+
+   PRESENT IN: sources, patches.
+   RESTRICTIONS: See "III. Flags".
+
+
+2. Patches
+   The columns in the 'patches' table are identical to the ones in 'sources',
+   with the exception of the "package" column- multiple patches may be
+   specified for a particular package.
+
+
+3. Mirrors
+   The 'mirrors' table is largely identical to the 'patches' table, with one
+   key difference- there is no "flags" column. This is because a mirror is
+   only even used if the 'M'/'m' flags are specified, and automatically by
+   design inherits the flags of the same entry in 'sources'. Multiple sources
+   for the same package may be provided; they will be tried in order they are
+   returned (sorted by "id").
+
+
+4. Checksums
+   Checksums are entirely optional, and only need to be entered if the 'C'/'c'
+   flags are specified for the source/patch. Largely the columns are the same
+   as the 'sources' and 'patches' tables' columns, but with several new
+   columns:
+
+a. "type"
+   What source to be applied to. Multiple checksums may be applied per type
+   (i.e. If you have three patches and the patch is flagged for a checksum
+   comparison, then all checksums matching the same "package", "type", and
+   "version" will be tried). If no matching checksums are found and a checksum
+   flag ('C'/'c') was applied, the check will fail and the source will return
+   an error.
+
+   RESTRICTIONS: Must be either 'sources' or 'patches'.
+
+b. "hash"
+   If a hash is supplied, then the URL/URI constructors ("protocol","urlbase",
+   "file_prefix","suffix") are ignored and the hash given directly in this
+   column will be used instead. If no "hash" is provided AND no valid URL/URI
+   construction occurs AND the check flag was applied ('C'/'c'), then the
+   check will fail and the source will return an error.
+
+   RESTRICTIONS: Must be present if URL/URI constructors are absent (or should
+   be blank if one wishes to fetch a checksum instead of manually entering
+   one).
+
+c. "algo"
+   The hashing type.
+
+   RESTRICTIONS: Must be one of 'md5','sha1','sha224','sha256','sha384', or
+   'sha512'. More (such as 'adler32','crc32', 'ripemd160', etc.) may be
+   supported depending on your platform's OpenSSL support (see
+   https://docs.python.org/3/library/hashlib.html for more information), but
+   are not necessarily supported by the script.
+   This is a required field. Failure to provide the checksum to fail and the
+   source will return an error (if flagged for checksumming).
+
+
+_III. FLAGS_
+
+A. "Flags?"
+   Flags are a way of controlling/defining certain behaviour of the source
+   checking/fetching/etc. They allow adding attributes to certain resources
+   without restructuring the entire database, allowing for independent changes
+   to be implemented in the actual script without needing any database rebuild,
+   reindexing, etc. One can even easily implement their own flags, as their
+   behaviour is defined by the script itself.
+
+
+B. Valid Flags
+
+Currently at the time of this spec version, the following flags are valid:
+
+_______________________________________________________________________________
+
+|	FLAG	ACTION		BEHAVIOUR				      |
+-------------------------------------------------------------------------------
+|	a	Anomalous	This source uses a non-standard (or "weird"   |
+|				  way of handling version numbers that isn't  |
+|				  supported yet. Currently just implies 'n',  |
+|				  but this may change in future releases.     |
+|				  Removed on next run.			      |
+|									      |
+|	A	Always		Like 'a', but never removed (persistent).     |
+|		Anomalous						      |
+|									      |
+|	b	Base64		Source is in base64.			      |
+|				  Removed on next run.			      |
+|									      |
+|	B	Always Base64	Like 'b', but never removed (persistent).     |
+|									      |
+|	c	Check Only	Only check for a new version (and if found,   |
+|				  update the version in the DB); do not fetch.|
+|				  Removed on next run.			      |
+|									      |
+|	C	Always Check	Like 'c', but never removed (persistent).     |
+|									      |
+|	e	Extra		"Long" versioning. May use version numbers    |
+|				  that are longer than Semantic Versioning    |
+|				  (e.g. '1.2.3.4' instead of '1.2.3').	      |
+|				  Removed on next run.			      |
+|									      |
+|	S	Always Extra	Like 's', but never removed (persistent).     |
+|									      |
+|	f	Fetch Only	Only fetch the current source, do not check   |
+|				  for a new version (only "last_fetched" will |
+|				  be updated in the DB).		      |
+|				  Removed on next run.			      |
+|									      |
+|	F	Always Fetch	Like 'f', but never removed (persistent).     |
+|									      |
+|	m	Mirrored	Use a corresponding mirror instead of the     |
+|				  primary source (make sure an entry with the |
+|				  same "package" field is in the 'mirrors'    |
+|				  table, or else this will fail).	      |
+|				  Removed on next run.			      |
+|									      |
+|	M	Always		Like 'm', but never removed (persistent).     |
+|		Mirrored						      |
+|									      |
+|	n	Never/Neither	Ignore for this run- do not fetch, do not     |
+|				  check for a new version.		      |
+|				  Removed on next run.			      |
+|									      |
+|	N	Always Never	Like 'n', but never removed (persistent).     |
+|									      |
+|	o	Obsolete	Obsolete. Was once a package to be included   |
+|				  in checks/fetches, but is no longer.	      |
+|				  Removed on next run.			      |
+|									      |
+|	O	Always		Like 'o', but never removed (persistent).     |
+|		Obsolete						      |
+|									      |
+|	s	Short		"Short" versioning. May use version numbers   |
+|				  that are shorter than Semantic Versioning   |
+|				  (e.g. '1.2' instead of '1.2.3').	      |
+|				  Removed on next run.			      |
+|									      |
+|	S	Always Short	Like 's', but never removed (persistent).     |
+|									      |
+|	x	Checksum	Compare downloaded file against a given       |
+|				  checksum ("checksum" column). Make sure a   |
+|				  checksum entry is given for the source,     |
+|				  otherwise this will fail.		      |
+|				  Removed on next run.			      |
+|									      |
+|	X	Always		Like 'x', but never removed (persistent).     |
+|		Checksum						      |
+_______________________________________________________________________________
+
+
