@@ -1,0 +1,130 @@
+###############################################################################
+###				Release Checker DB Spec			    ###
+###									    ###
+###					v1.0				    ###
+###			brent s., bts <at> square-r00t <dot> net	    ###
+###		     for the Pür Linux project; http://purlinux.org	    ###
+###############################################################################
+
+
+
+_I. FAQ_
+
+A.
+Q: WHY THE HELL?!
+A: Because fetching upstream sources is surprisingly complex! You need to be
+   able to change parts of the URL with each release, the filename, use an
+   alternate mirror URL if the original has rate limiting, things like that.
+
+B.
+Q: Okay, but why Sqlite3/why a database?
+A: A text file isn't very conducive to sectioning out and parsing those
+   particular sections. We need something that contains bits of information,
+   can easily have only part of that data fetched, can have multiple parts
+   concatenated, sections of that easily updated, etc. Sqlite3 especially is a
+   good choice because it doesn't require a binary client on the host the
+   script runs on- just the python library (many distributions' python installs
+   even include the sqlite3 module by default). Sqlite3 requires no running
+   daemon or the like either.
+
+C.
+Q: Okay... I get it. Mutter, mutter, mutter. But how is it laid out?
+A: Why, simply reference the handy schema (see: II. Schema)!
+
+
+
+_II. SCHEMA_
+
+A.
+_______________________________________________________________________________
+
+   PRAGMA foreign_keys=OFF;
+   BEGIN TRANSACTION;
+   CREATE TABLE "sources" (
+	`id`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`package`	TEXT NOT NULL UNIQUE,
+	`protocol`	TEXT NOT NULL DEFAULT ('http'),
+	`urlbase`	TEXT NOT NULL,
+	`file_prefix`	TEXT,
+	`version`	TEXT NOT NULL,
+	`suffix`	TEXT NOT NULL,
+	`comment`	TEXT,
+	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER',
+	`flags`		TEXT
+   );
+   CREATE TABLE "patches" (
+	`id`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`package`	TEXT NOT NULL,
+	`protocol`	TEXT NOT NULL DEFAULT ('http'),
+	`urlbase`	TEXT NOT NULL,
+	`file_prefix`	TEXT,
+	`version`	TEXT NOT NULL,
+	`suffix`	TEXT,
+	`comment`	TEXT,
+	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER',
+	`flags`		TEXT
+   );
+   CREATE TABLE "mirrors" (
+	`id`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`package`	TEXT NOT NULL,
+	`protocol`	TEXT NOT NULL DEFAULT ('http'),
+	`urlbase`	TEXT NOT NULL,
+	`file_prefix`	TEXT,
+	`version`	TEXT NOT NULL,
+	`suffix`	TEXT,
+	`comment`	TEXT,
+	`last_fetched`	TEXT NOT NULL DEFAULT 'NEVER'
+   );
+   COMMIT;
+_______________________________________________________________________________
+
+
+B. Detailed specification
+
+1. Sources
+a. "id"
+   This column is a numerical, serialized, unique key. It's mostly handy for
+   speeding up queries on the same row.
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: Must not be manually entered.
+
+b. "package"
+   The actual name of the software. This is mostly intended to be a human-
+   friendly reference for the software.
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: Freeform. Recommended no whitespace or non-ASCII symbols.
+
+c. "protocol"
+   The protocol used to fetch the source. Future support may include rsync,
+   sftp/scp, etc.
+   e.g. Original URL: https://www.domain.tld/dir/subdir/filename-1.2.3.tar.gz
+        protocol: https
+
+   PRESENT IN: sources, patches, mirrors.
+   Restrictions: Must be one of: http, https, ftp. (More may be implemented in
+   future.)
+
+d. "urlbase"
+   The part of the URL/URI not including the file or protocol specifier. May
+   be altered on successful fetch/check/etc. (depending on flags and if version
+   string is present in URI).
+   e.g. Original URL: http://www.domain.tld/dir/subdir/filename-1.2.3.tar.gz
+        urlbase: www.domain.tld/dir/subdir/
+
+   PRESNT IN: sources, patches, mirrors.
+   RESTRICTIONS: Must be valid URI format (i.e. use '%20' instead of ' '). May
+   be case-sensitive (depending on server's configuration).
+
+e. "file_prefix"
+   The part of the filename found before the version string.
+   e.g. Original URL: http://www.domain.tld/dir/subdir/filename-1.2.3.tar.gz
+        file_prefix: filename-
+
+   PRESENT IN: sources, patches, mirrors.
+   RESTRICTIONS: May be blank. May be case-sensitive (depending on server's
+   configuration).
+
+f. "version"
+   The actual version string. This may be updated on 
