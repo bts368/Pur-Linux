@@ -6,3 +6,5 @@
 12:27:22 < r00t^2> hrm.. interesting. so they could snapshot their personal base, is what you're saying?
 12:27:57 <@RainbowHash> it'd move us more in line with how freebsd does things, and keep track of what goes where in Base better
 
+01:29:54 <RainbowHash> add net-tools to that list of stuff
+
