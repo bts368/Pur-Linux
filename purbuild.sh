@@ -196,7 +196,7 @@ else
 fi
 echo "Extracting main packageset..."
 tar --totals -Jxf pur_src.${PUR_RLS}${RLS_MOD}.tar.xz
-cd pur_src/base
+cd pur_src/core
 mv * ${PSRC}
 cd ../contrib
 mv * ${PCNTRB}
