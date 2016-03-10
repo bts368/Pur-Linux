@@ -208,7 +208,7 @@ GCCVER=$(egrep '^gcc-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLVER=$(egrep '^perl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLMAJ=$(echo ${PERLVER} | sed -re 's/([0-9]*)\..*$/\1/g')
 TCLVER=$(egrep '^tcl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g' | awk -F. '{print $1"."$2}')
-export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ
+export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ TLCVER
 
 echo
 
@@ -751,15 +751,38 @@ then
 fi
 # Entering chroot 
 cd ${PUR}
-${fetch_cmd} https://raw.githubusercontent.com/PurLinux/Base/CURRENT/chrootboot.sh
+if [ "${USER}" == 'bts' ];
+then
+	# used in development
+	${fetch_cmd} http://10.1.1.1/pur/chrootboot.sh
+	${fetch_cmd} http://10.1.1.1/pur/chrootboot-stage2.sh
+else
+	${fetch_cmd} https://raw.githubusercontent.com/PurLinux/Base/CURRENT/chrootboot.sh
+	${fetch_cmd} https://raw.githubusercontent.com/PurLinux/Base/CURRENT/chrootboot-stage2.sh
+fi
 chmod +x chrootboot.sh
 echo "ENTERING CHROOT"
-sudo chroot "${PUR}" /tools/bin/env -i      \
-			HOME=/root     \
-			TERM="${TERM}" \
-			PS1='\u:\w\$ ' \
-			PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin \
-			/tools/bin/bash /chrootboot.sh
+sudo chroot "${PUR}" /tools/bin/env -i      			\
+		HOME=/root					\
+		TERM="${TERM}"					\
+		PS1='\u:\w (chroot) \$ '			\
+		PS4="${PS4}"					\
+		PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin	\
+		/tools/bin/bash /chrootboot.sh
+
+sudo chroot "${PUR}" /tools/bin/env -i HOME=/root TERM=$TERM	\
+		PS1='\u:\w\$ '					\
+		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
+		/tools/bin/find /{,usr/}{bin,lib,sbin} -type f	\
+		-exec /tools/bin/strip --strip-debug '{}' ';'
+
+sudo chroot "${PUR}" /tools/bin/env -i      			\
+		HOME=/root					\
+		TERM="${TERM}"					\
+		PS1='\u:\w (chroot) \$ '			\
+		PS4="${PS4}"					\
+		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
+		/tools/bin/bash /chrootboot-stage2.sh
 sudo umount -l ${PUR}/{run,sys,proc,dev} > /dev/null 2>&1
 
-rm -f ${PSRC}/pur_src.${PUR_RLS}${PUR_MOD}.tar.xz{,.sha256}
+rm -f ${PSRC}/pur_src.${PUR_RLS}${RLS_MOD}.tar.xz{,.sha256}
