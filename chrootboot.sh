@@ -233,7 +233,7 @@ then
 	echo "Compiler searching for wrong header files! Bailing out..."
 	exit 1
 fi
-linecnt=$(grep 'SEARCH.*/usr/lib' dummy.log | sed -e 's|; |\n|g' | egrep -Ec '^(SEARCH_DIR\("/usr/lib"\)|SEARCH_DIR\("/lib"\);[[:space:]]*$')
+linecnt=$(grep 'SEARCH.*/usr/lib' dummy.log | sed -e 's|; |\n|g' | egrep -Ec '^(SEARCH_DIR\("/usr/lib"\)|SEARCH_DIR\("/lib"\))[[:space:]]*$')
 if [ "${linecnt}" != '2' ];
 then
 	echo "Linker using incorrect search paths! Bailing out..."
@@ -245,7 +245,7 @@ then
 	"Incorrect LibC being used! Bailing out..."
 	exit 1
 fi
-grep found dummy.log | egrep -Eq '^found ld-linux\.so\.2 at /lib(32|64)?/ld-linux\.so\.2[[:space:]]*$'
+grep found dummy.log | egrep -Eq '^found ld-linux-[ix]6?86(-64)?\.so\.2 at /lib(32|64)?/ld-linux-[xi]6?86(-64)?\.so\.2[[:space:]]*$'
 if [ "${?}" != '0' ];
 then
 	# per LFS 7.8, p.97, "If the output does not appear [as we check for it], then something is seriously wrong." thanks!

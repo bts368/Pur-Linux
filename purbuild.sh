@@ -751,6 +751,7 @@ then
 fi
 # Entering chroot 
 cd ${PUR}
+rm -f chrootboot{,-stage2}.sh
 if [ "${USER}" == 'bts' ];
 then
 	# used in development
