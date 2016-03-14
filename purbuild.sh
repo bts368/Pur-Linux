@@ -138,7 +138,7 @@ find ${PCNTRB}/. -maxdepth 1 -ignore_readdir_race -type d -exec rm -rf '{}' \; >
 LC_ALL=POSIX
 PUR_TGT="$(uname -m)-pur-linux-gnu"
 sudo rm -rf /tools
-sudo ln -s ${PUR}/tools /tools
+sudo ln -s ${PUR}/tools /
 
 PTLS=${PUR}/tools
 rm -rf ${PTLS}/include
@@ -493,7 +493,7 @@ echo "[DejaGNU] Configuring..."
 
 echo "[DejaGNU] Building..."
 make install > ${PLOGS}/dejagnu_make.1 2>&1
-make check >> ${PLOGS}/dejagnu_make.1 2>&1
+#make check >> ${PLOGS}/dejagnu_make.1 2>&1
 
 #check
 cd ${PSRC}/check
@@ -504,7 +504,7 @@ PKG_CONFIG= ./configure --prefix=/tools > ${PLOGS}/check_configure.1 2>&1
 
 echo "[Check] Building..."
 make > ${PLOGS}/check_make.1 2>&1
-make check >> ${PLOGS}/check_make.1 2>&1
+#make check >> ${PLOGS}/check_make.1 2>&1
 make install >> ${PLOGS}/check_make.1 2>&1
 
 #ncurses
@@ -566,7 +566,7 @@ echo "[File] Configuring..."
 
 echo "[File] Building..."
 make > ${PLOGS}/file_make.1 2>&1
-make check >> ${PLOGS}/file_make.1 2>&1
+#make check >> ${PLOGS}/file_make.1 2>&1
 make install >> ${PLOGS}/file_make.1 2>&1
 
 # Findutils
@@ -576,7 +576,7 @@ echo "[Findutils] Configuring..."
 
 echo "[Findutils] Building..."
 make > ${PLOGS}/findutils_makee.1 2>&1
-make check >> ${PLOGS}/findutils_makee.1 2>&1
+#make check >> ${PLOGS}/findutils_makee.1 2>&1
 make install >> ${PLOGS}/findutils_makee.1 2>&1
 
 # GAWK
@@ -586,7 +586,7 @@ echo "[Gawk] Configuring..."
 
 echo "[Gawk] Building..."
 make > ${PLOGS}/gawk_make.1 2>&1
-make check >> ${PLOGS}/gawk_make.1 2>&1
+#make check >> ${PLOGS}/gawk_make.1 2>&1
 make install >> ${PLOGS}/gawk_make.1 2>&1
 
 #gettext
@@ -620,7 +620,7 @@ echo "[Gzip] Configuring..."
 
 echo "[Gzip] Building..."
 make > ${PLOGS}/gzip_make.1 2>&1
-make check >> ${PLOGS}/gzip_make.1 2>&1
+#make check >> ${PLOGS}/gzip_make.1 2>&1
 make install >> ${PLOGS}/gzip_make.1 2>&1
 
 # M4
@@ -640,7 +640,7 @@ echo "[Make] Configuring..."
 
 echo "[Make] Building..."
 make > ${PLOGS}/make_make.1 2>&1
-make check >> ${PLOGS}/make_make.1 2>&1
+#make check >> ${PLOGS}/make_make.1 2>&1
 make install >> ${PLOGS}/make_make.1 2>&1
 
 #GNU Patch
@@ -650,7 +650,7 @@ echo "[Patch] Configuring..."
 
 echo "[Patch] Building..."
 make > ${PLOGS}/patch_make.1 2>&1
-make check >> ${PLOGS}/patch_make.1 2>&1
+#make check >> ${PLOGS}/patch_make.1 2>&1
 make install >> ${PLOGS}/patch_make.1 2>&1
 
 # Perl (Will be removed from Base eventually)
@@ -671,7 +671,7 @@ echo "[Sed] Configuring..."
 
 echo "[Sed] Building..."
 make > ${PLOGS}/sed_make.1 2>&1
-make check >> ${PLOGS}/sed_make.1 2>&1
+#make check >> ${PLOGS}/sed_make.1 2>&1
 make install >> ${PLOGS}/sed_make.1 2>&1
 
 #GNU Tar
@@ -681,7 +681,7 @@ echo "[Tar] Configuring..."
 
 echo "[Tar] Building..."
 make > ${PLOGS}/tar_make.1 2>&1
-make check >> ${PLOGS}/tar_make.1 2>&1
+#make check >> ${PLOGS}/tar_make.1 2>&1
 make install >> ${PLOGS}/tar_make.1 2>&1
 
 #GNU Texinfo
@@ -691,7 +691,7 @@ echo "[Texinfo] Configuring..."
 
 echo "[Texinfo] Building..."
 make > ${PLOGS}/texinfo_make.1 2>&1
-make check >> ${PLOGS}/texinfo_make.1 2>&1
+#make check >> ${PLOGS}/texinfo_make.1 2>&1
 make install >> ${PLOGS}/texinfo_make.1 2>&1
 
 # Util-Linux
@@ -714,7 +714,7 @@ echo "[Xz] Configuring..."
 
 echo "[Xz] Building..."
 make > ${PLOGS}/xz_make.1 2>&1
-make check >> ${PLOGS}/xz_make.1 2>&1
+#make check >> ${PLOGS}/xz_make.1 2>&1
 make install >> ${PLOGS}/xz_make.1 2>&1
 
 
@@ -762,6 +762,7 @@ else
 	${fetch_cmd} https://raw.githubusercontent.com/PurLinux/Base/CURRENT/chrootboot-stage2.sh
 fi
 chmod +x chrootboot.sh
+chmod +x chrootboot-stage2.sh
 echo "ENTERING CHROOT"
 sudo chroot "${PUR}" /tools/bin/env -i      			\
 		HOME=/root					\
@@ -769,7 +770,11 @@ sudo chroot "${PUR}" /tools/bin/env -i      			\
 		PS1='\u:\w (chroot) \$ '			\
 		PS4="${PS4}"					\
 		PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin	\
-		/tools/bin/bash /chrootboot.sh
+		GCCVER=${GCCVER}				\
+		VIMVER=${VIMVER}				\
+		/tools/bin/bash +h /chrootboot.sh
+
+touch ${PUR}/chrootboot1.success
 
 sudo chroot "${PUR}" /tools/bin/env -i HOME=/root TERM=$TERM	\
 		PS1='\u:\w\$ '					\
@@ -777,13 +782,20 @@ sudo chroot "${PUR}" /tools/bin/env -i HOME=/root TERM=$TERM	\
 		/tools/bin/find /{,usr/}{bin,lib,sbin} -type f	\
 		-exec /tools/bin/strip --strip-debug '{}' ';'
 
+touch ${PUR}/chrootboot2.success
+
 sudo chroot "${PUR}" /tools/bin/env -i      			\
 		HOME=/root					\
 		TERM="${TERM}"					\
 		PS1='\u:\w (chroot) \$ '			\
 		PS4="${PS4}"					\
 		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
-		/tools/bin/bash /chrootboot-stage2.sh
+		GCCVER=${GCCVER}				\
+		VIMVER=${VIMVER}				\
+		/tools/bin/bash +h /chrootboot-stage2.sh
+
+touch ${PUR}/chrootboot3.success
+
 sudo umount -l ${PUR}/{run,sys,proc,dev} > /dev/null 2>&1
 
 rm -f ${PSRC}/pur_src.${PUR_RLS}${RLS_MOD}.tar.xz{,.sha256}

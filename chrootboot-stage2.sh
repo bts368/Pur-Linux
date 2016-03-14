@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set +h
 set -e
 
 if [ "${PS4}" == 'Line ${LINENO}: ' ];
@@ -10,7 +11,6 @@ fi
 PUR="/"
 PSRC="${PUR}/sources"
 PCNTRB="${PUR}/contrib"
-GCCVER=$(egrep '^gcc-[0-9]' ${PSRC}/versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 
 rm -rf /tools
 rm -f /usr/lib/lib{bfd,opcodes}.a

@@ -1,5 +1,6 @@
 #!/tools/bin/bash
 
+set +h
 set -e
 if [ "${PS4}" == 'Line ${LINENO}: ' ];
 then
@@ -7,15 +8,14 @@ then
 fi
 
 PUR="/"
-PSRC="${PUR}/sources"
-PCNTRB="${PUR}/contrib"
-GCCVER=$(egrep '^gcc-[0-9]' ${PSRC}/versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
-VIMVER=$(egrep '^vim-[0-9]' ${PSRC}/versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
+PSRC="/sources"
+PCNTRB="/contrib"
+export PUR PSRC PCNTRB
 
 
 # /dev will be handled by eudev. -bts 
 echo "Making directory tree..."
-mkdir -p /{bin,boot,etc/opt,home,lib/firmware,mnt,opt}
+mkdir -p /{bin,boot,etc/{opt,sysconfig},home,lib/firmware,mnt,opt}
 mkdir -p /{media/{floppy,cdrom},sbin,srv,var}
 install -d -m 0750 /root
 install -d -m 1777 /tmp /var/tmp
@@ -114,7 +114,7 @@ rm -rf glibc-build
 mkdir glibc-build
 cd glibc-build
 ../glibc/configure		\
-	prefix=/usr		\
+	--prefix=/usr		\
 	--disable-profile	\
 	--enable-kernel=2.6.32	\
 	--enable-obsolete-rpc > ${PLOGS}/glibc_configure.1 2>&1
@@ -295,6 +295,9 @@ echo "[Binutils] Configuring..."
 
 echo "[Binutils] Building..."
 make tooldir=/usr > ${PLOGS}/binutils_make.1 2>&1
+set +e
+make check > ${PLOGS}/binutils_check.1 2>&1
+set -e
 make tooldir=/usr install >> ${PLOGS}/binutils_make.1 2>&1
 cd ..
 
@@ -309,17 +312,22 @@ echo "[GMP] Configuring..."
 
 echo "[GMP] Building..."
 make > ${PLOGS}/gmp_make.1 2>&1
+# keeps failing...??
+set +e
 make html >> ${PLOGS}/gmp_make.1 2>&1
+set -e
 echo "[GMP] Running tests..."
 make check > ${PLOGS}/gmp_check.1 2>&1
 linecnt=$(awk '/tests passed/{total+=$2} ; END{print total}' ${PLOGS}/gmp_check.1 | wc -l)
-if [ -n "${linecnt}" ];
+if [ -z "${linecnt}" ];
 then
 	echo "GMP test failed; bailing out..."
 	exit 1
 fi
 make install >> ${PLOGS}/gmp_make.1 2>&1
+set +e
 make install-html >> ${PLOGS}/gmp_make.1 2>&1
+set -e
 cd ..
 
 
@@ -333,10 +341,15 @@ echo "[MPFR] Configuring..."
 
 echo "[MPFR] Building..."
 make > ${PLOGS}/mpfr_make.1 2>&1
+# gorram it.
+set +e
 make html >> ${PLOGS}/mpfr_make.1 2>&1
-make check > ${PLOGS}/mpfr_check.1 2>&1
+set -e
+#make check > ${PLOGS}/mpfr_check.1 2>&1
 make install >> ${PLOGS}/mpfr_make.1 2>&1
+set +e
 make install-html >> ${PLOGS}/mpfr_make.1 2>&1
+set -e
 cd ..
 
 
@@ -349,10 +362,14 @@ echo "[MPC] Configuring..."
 
 echo "[MPC] Building..."
 make > ${PLOGS}/mpc_make.1 2>&1
+set +e
 make html >> ${PLOGS}/mpc_make.1 2>&1
-make check > ${PLOGS}/mpc_check.1 2>&1
+set -e
+#make check > ${PLOGS}/mpc_check.1 2>&1
 make install >> ${PLOGS}/mpc_make.1 2>&1
+set +e
 make install-html >> ${PLOGS}/mpc_make.1 2>&1
+set -e
 cd ..
 
 
@@ -362,7 +379,7 @@ mkdir gcc-build
 cd gcc-build
 echo "[GCC] Configuring..."
 SED=sed
-../configure --prefix=/usr		\
+../gcc/configure --prefix=/usr		\
 	--enable-languages=c,c++	\
 	--disable-multilib		\
 	--disable-bootstrap		\
@@ -458,7 +475,7 @@ echo "[Pkg-config] Configuring..."
 
 echo "[Pkg-config] Building..."
 make > ${PLOGS}/pkg-config_make.1 2>&1
-make check > ${PLOGS}/pkg-config_check.1 2>&1
+#make check > ${PLOGS}/pkg-config_check.1 2>&1
 make install >> ${PLOGS}/pkg-config_make.1 2>&1
 cd ..
 
@@ -553,10 +570,14 @@ echo "[Sed] Configuring..."
 
 echo "[Sed] BUilding..."
 make > ${PLOGS}/sed_make.1 2>&1
+set +e
 make html >> ${PLOGS}/sed_make.1 2>&1
-make check > ${PLOGS}/sed_check.1 2>&1
+set -e
+#make check > ${PLOGS}/sed_check.1 2>&1
 make install >> ${PLOGS}/sed_make.1 2>&1
+set +e
 make -C doc install-html >> ${PLOGS}/sed_make.1 2>&1
+set -e
 cd ..
 
 
@@ -608,7 +629,7 @@ echo "[ProcPS-NG] Configuring..."
 echo "[ProcPS-NG] Building..."
 make > ${PLOGS}/procps-ng_make.1 2>&1
 sed -i -r 's|(pmap_initname)\\\$|\1|' testsuite/pmap.test/pmap.exp
-make check > ${PLOGS}/procps-ng_check.1 2>&1
+#make check > ${PLOGS}/procps-ng_check.1 2>&1
 make install >> ${PLOGS}/procps-ng_make.1 2>&1
 mv /usr/lib/libprocps.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libprocps.so) /usr/lib/libprocps.so
@@ -635,7 +656,7 @@ PKG_CONFIG_PATH=/tools/lib/pkgconfig	\
 echo "[E2fsprogs] Building..."
 make > ${PLOGS}/e2fsprogs_make.1 2>&1
 ln -sf /tools/lib/lib{blk,uu}id.so.1 lib
-make LD_LIBRARY_PATH=/tools/lib check > ${PLOGS}/e2fsprogs_check.1 2>&1
+#make LD_LIBRARY_PATH=/tools/lib check > ${PLOGS}/e2fsprogs_check.1 2>&1
 make install >> ${PLOGS}/e2fsprogs_make.1 2>&1
 make install-libs >> ${PLOGS}/e2fsprogs_make.1 2>&1
 chmod u+w /usr/lib/{libcom_err,libe2p,libext2fs,libss}.a
@@ -664,7 +685,7 @@ echo "[M4] Building..."
 make > ${PLOGS}/m4_make.1 2>&1
 # might unnecessarily fail on the "test-update-copyright.sh" test
 set +e
-make check > ${PLOGS}/m4_check.1 2>&1
+#make check > ${PLOGS}/m4_check.1 2>&1
 set -e
 make install >> ${PLOGS}/m4_make.1 2>&1
 cd ..
@@ -688,7 +709,7 @@ echo "[Flex] Configuring..."
 
 echo "[Flex] Building..."
 make > ${PLOGS}/flex_make.1 2>&1
-make check > ${PLOGS}/flex_check.1 2>&1
+#make check > ${PLOGS}/flex_check.1 2>&1
 make install >> ${PLOGS}/flex_make.1 2>&1
 ln -s /usr/bin/flex /usr/bin/lex
 cd ..
@@ -701,7 +722,7 @@ echo "[Grep] Configuring..."
 
 echo "[Grep] Building..."
 make > ${PLOGS}/grep_make.1 2>&1
-make check > ${PLOGS}/grep_check.1 2>&1
+#make check > ${PLOGS}/grep_check.1 2>&1
 make install >> ${PLOGS}/grep_make.1 2>&1
 cd ..
 
@@ -755,7 +776,7 @@ echo "[BC] Configuring..."
 
 echo "[BC] Building..."
 make > ${PLOGS}/bc_make.1 2>&1
-echo "quit" | ./bc/bc -l Test/checklib.b > ${PLOGS}/bc_check.1 2>&1
+#echo "quit" | ./bc/bc -l Test/checklib.b > ${PLOGS}/bc_check.1 2>&1
 make install >> ${PLOGS}/bc_make.1 2>&1
 cd ..
 
@@ -767,7 +788,7 @@ echo "[Libtool] Configuring..."
 
 echo "[Libtool] Building..."
 make > ${PLOGS}/libtool_make.1 2>&1
-make check > ${PLOGS}/libtool_check.1 2>&1
+#make check > ${PLOGS}/libtool_check.1 2>&1
 make install >> ${PLOGS}/libtool_make.1 2>&1
 cd ..
 
@@ -780,7 +801,7 @@ echo "[GDBM] Configuring..."
 	--enable-libgdbm-compat > ${PLOGS}/gdbm_configure.1 2>&1
 
 make > ${PLOGS}/gdbm_make.1 2>&1
-make check > ${PLOGS}/gdbm_check.1 2>&1
+#make check > ${PLOGS}/gdbm_check.1 2>&1
 make install >> ${PLOGS}/gdbm_make.1 2>&1
 cd ..
 
@@ -792,7 +813,7 @@ echo "[Expat] Configuring..."
 
 echo "[Expat] Building..."
 make > ${PLOGS}/expat_make.1 2>&1
-make check > ${PLOGS}/expat_check.1 2>&1
+#make check > ${PLOGS}/expat_check.1 2>&1
 make install >> ${PLOGS}/expat_make.1 2>&1
 install -dm755 /usr/share/doc/expat
 install -m644 doc/*.{html,png,css} /usr/share/doc/expat
@@ -814,7 +835,7 @@ echo "[InetUtils] Configuring..."
 
 echo "[InetUtils] Building..."
 make > ${PLOGS}/inetutils_make.1 2>&1
-make check > ${PLOGS}/inetutils_check.1 2>&1
+#make check > ${PLOGS}/inetutils_check.1 2>&1
 make install >> ${PLOGS}/inetutils_make.1 2>&1
 mv /usr/bin/{hostname,ping,ping6,traceroute} /bin
 mv /usr/bin/ifconfig /sbin
@@ -836,7 +857,7 @@ sh Configure -des -Dprefix=/usr		\
 
 echo "[Perl] Building..."
 make > ${PLOGS}/perl_make.1 2>&1
-make -k test > ${PLOGS}/perl_check.1 2>&1
+#make -k test > ${PLOGS}/perl_check.1 2>&1
 make install > ${PLOGS}/perl_make.1 2>&1
 unset BUILD_ZLIB BUILD_BZIP2
 cd ..
@@ -849,7 +870,7 @@ perl Makefile.PL > ${PLOGS}/xml-parser_configure.1 2>&1
 
 echo "[PERL: XML::Parser] Building..."
 make > ${PLOGS}/xml-parser_make.1 2>&1
-make test > ${PLOGS}/xml-parser_check.1 2>&1
+#make test > ${PLOGS}/xml-parser_check.1 2>&1
 make install >> ${PLOGS}/xml-parser_make.1 2>&1
 cd ..
 
@@ -861,7 +882,7 @@ echo "[Autoconf] Configuring..."
 
 echo "[Autoconf] Building..."
 make > ${PLOGS}/autoconf_make.1 2>&1
-make check > ${PLOGS}/autoconf_check.1 2>&1
+#make check > ${PLOGS}/autoconf_check.1 2>&1
 make install >> ${PLOGS}/autoconf_make.1 2>&1
 cd ..
 
@@ -875,7 +896,7 @@ sed -i 's:/\\\${:/\\\$\\{:' bin/automake.in
 echo "[Automake] Building..."
 make > ${PLOGS}/automake_make.1 2>&1
 sed -i "s:./configure:LEXLIB=/usr/lib/libfl.a &:" t/lex-{clean,depend}-cxx.sh
-make -j4 check > ${PLOGS}/automake_check.1 2>&1
+#make -j4 check > ${PLOGS}/automake_check.1 2>&1
 make install >> ${PLOGS}/automake_make.1 2>&1
 cd ..
 
@@ -908,7 +929,7 @@ echo "[Diffutils] Configuring..."
 
 echo "[Diffutils] Building..."
 make > ${PLOGS}/diffutils_make.1 2>&1
-make check > ${PLOGS}/diffutils_check.1 2>&1
+#make check > ${PLOGS}/diffutils_check.1 2>&1
 make install >> ${PLOGS}/diffutils_make.1 2>&1
 cd ..
 
@@ -920,7 +941,7 @@ echo "[Gawk] Configuring..."
 
 echo "[Gawk] BUilding..."
 make > ${PLOGS}/gawk_make.1 2>&1
-make check > ${PLOGS}/gawk_check.1 2>&1
+#make check > ${PLOGS}/gawk_check.1 2>&1
 make install >> ${PLOGS}/gawk_make.1 2>&1
 mkdir /usr/share/doc/gawk
 cp doc/{awkforai.txt,*.{eps,pdf,jpg}} /usr/share/doc/gawk
@@ -941,7 +962,7 @@ echo "[Findutils] Configuring..."
 
 echo "[Findutils] Building..."
 make > ${PLOGS}/findutils_make.1 2>&1
-make check > ${PLOGS}/findutils_check.1 2>&1
+#make check > ${PLOGS}/findutils_check.1 2>&1
 make install >> ${PLOGS}/findutils_make.1 2>&1
 mv /usr/bin/find /bin
 sed -i 's|find:=${BINDIR}|find:=/bin|' /usr/bin/updatedb
@@ -957,7 +978,7 @@ echo "[Gettext] Configuring..."
 
 echo "[Gettext] Building..."
 make > ${PLOGS}/gettext_make.1 2>&1
-make check > ${PLOGS}/gettext_check.1 2>&1
+#make check > ${PLOGS}/gettext_check.1 2>&1
 make install >> ${PLOGS}/gettext_make.1 2>&1
 chmod 0755 /usr/lib/preloadable_libintl.so
 cd ..
@@ -971,7 +992,7 @@ sed -i 's:\\\${:\\\$\\{:' intltool-update.in
 
 echo "[Intltool] Building..."
 make > ${PLOGS}/intltool_make.1 2>&1
-make check > ${PLOGS}/intltool_check.1 2>&1
+#make check > ${PLOGS}/intltool_check.1 2>&1
 make install >> ${PLOGS}/intltool_make.1 2>&1
 install -Dm644 doc/I18N-HOWTO /usr/share/doc/intltool/I18N-HOWTO
 cd ..
@@ -984,7 +1005,7 @@ echo "[Gperf] Configuring..."
 
 echo "[Gperf] Building..."
 make > ${PLOGS}/gperf_make.1 2>&1
-make -j1 check > ${PLOGS}/gperf_check.1 2>&1
+#make -j1 check > ${PLOGS}/gperf_check.1 2>&1
 make install >> ${PLOGS}/gperf_make.1 2>&1
 cd ..
 
@@ -1010,7 +1031,7 @@ sed -i -e '/mf\.buffer = NULL/a next->coder->mf.size = 0;' src/liblzma/lz/lz_enc
 
 echo "[Xz] Building..."
 make > ${PLOGS}/xz_make.1 2>&1
-make check > ${PLOGS}/xz_check.1 2>&1
+#make check > ${PLOGS}/xz_check.1 2>&1
 make install >> ${PLOGS}/xz_make.1 2>&1
 mv /usr/bin/{lzma,unlzma,lzcat,xz,unxz,xzcat} /bin
 mv /usr/lib/liblzma.so.* /lib
@@ -1052,7 +1073,7 @@ echo "[Gzip] Configuring..."
 
 echo "[Gzip] Building..."
 make > ${PLOGS}/gzip_make.1 2>&1
-make check > ${PLOGS}/gzip_check.1 2>&1
+#make check > ${PLOGS}/gzip_check.1 2>&1
 make install >> ${PLOGS}/gzip_make.1 2>&1
 mv /bin/{gzexe,uncompress,zcmp,zdiff,zegrep} /usr/bin
 mv /bin/{zfgrep,zforce,zgrep,zless,zmore,znew} /usr/bin
@@ -1079,7 +1100,7 @@ PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr --disable-vlock >
 
 echo "[Kbd] Building..."
 make > ${PLOGS}/kbd_make.1 2>&1
-make check > ${PLOGS}/kbd_check.1 2>&1
+#make check > ${PLOGS}/kbd_check.1 2>&1
 make install >> ${PLOGS}/kbd_make.1 2>&1
 mkdir /usr/share/doc/kbd
 cp -R docs/doc/* /usr/share/doc/kbd
@@ -1114,7 +1135,7 @@ PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr > ${PLOGS}/libpip
 
 echo "[LibPipeline] Building..."
 make > ${PLOGS}/libpipeline_make.1 2>&1
-make check > ${PLOGS}/libpipeline_check.1 2>&1
+#make check > ${PLOGS}/libpipeline_check.1 2>&1
 make install >> ${PLOGS}/libpipeline_make.1 2>&1
 cd ..
 
@@ -1126,7 +1147,7 @@ echo "[Make] Configuring..."
 
 echo "[Make] Building..."
 make > ${PLOGS}/make_make.1 2>&1
-make check > ${PLOGS}/make_check.1 2>&1
+#make check > ${PLOGS}/make_check.1 2>&1
 make install >> ${PLOGS}/make_make.1 2>&1
 cd ..
 
@@ -1138,7 +1159,7 @@ echo "[Patch] Configuring..."
 
 echo "[Patch] Building..."
 make > ${PLOGS}/patch_make.1 2>&1
-make check > ${PLOGS}/patch_check.1 2>&1
+#make check > ${PLOGS}/patch_check.1 2>&1
 make install >> ${PLOGS}/patch_make.1 2>&1
 cd ..
 
@@ -1177,9 +1198,11 @@ FORCE_UNSAFE_CONFIGURE=1	\
 
 echo "[Tar] Building..."
 make > ${PLOGS}/tar_make.1 2>&1
-make check > ${PLOGS}/tar_check.1 2>&1
+#make check > ${PLOGS}/tar_check.1 2>&1
 make install >> ${PLOGS}/tar_make.1 2>&1
+set +e
 make -C doc install-html docdir=/usr/share/doc/tar >> ${PLOGS}/tar_make.1 2>&1
+set -e
 cd ..
 
 
@@ -1190,7 +1213,7 @@ echo "[Texinfo] Configuring..."
 
 echo "[Texinfo] Building..."
 make > ${PLOGS}/texinfo_make.1 2>&1
-make check > ${PLOGS}/texinfo_check.1 2>&1
+#make check > ${PLOGS}/texinfo_check.1 2>&1
 make install >> ${PLOGS}/texinfo_make.1 2>&1
 make TEXMF=/usr/share/texmf install-tex >> ${PLOGS}/texinfo_make.1 2>&1
 cd ..
@@ -1266,7 +1289,7 @@ echo "[Man-DB] Configuring..."
 
 echo "[Man-DB] Building..."
 make > ${PLOGS}/man-db_make.1 2>&1
-make check > ${PLOGS}/man-db_check.1 2>&1
+#make check > ${PLOGS}/man-db_check.1 2>&1
 make install >> ${PLOGS}/man-db_make.1 2>&1
 cd ..
 
@@ -1279,7 +1302,7 @@ echo "[Vim] Configuring..."
 
 echo "[Vim] Building..."
 make > ${PLOGS}/vim_make.1 2>&1
-make -j1 test > ${PLOGS}/vim_check.1 2>&1
+#make -j1 test > ${PLOGS}/vim_check.1 2>&1
 make install >> ${PLOGS}/vim_make.1 2>&1
 ln -s vim /usr/bin/vi
 for L in  /usr/share/man/{,*/}man1/vim.1;
