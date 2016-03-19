@@ -116,7 +116,6 @@ umask 022
 echo
 
 # Scrub/create paths
-#rm -rf ${HOME}/purroot
 mkdir -p ${HOME}/purroot
 PUR=${HOME}/purroot
 PLOGS=${PUR}/logs
@@ -204,19 +203,47 @@ else
 fi
 echo "Extracting main packageset..."
 tar --totals -Jxf pur_src.${PUR_RLS}${RLS_MOD}.tar.xz
-cd pur_src/core
-mv * ${PSRC}
-cd ../contrib
-mv * ${PCNTRB}
-rm -rf pur_src
-cd ${PSRC}
-GLIBCVERS=$(egrep '^glibc-[0-9]' versions.txt | sed -re 's/[A-Za-z]-(.*)$/\1/g')
-HOSTGLIBCVERS="2.11"
+#cd pur_src/core
+#mv * ${PSRC}
+#cd ../contrib
+#mv * ${PCNTRB}
+#rm -rf pur_src
+cd ${PSRC}/pur_src/core
+GLIBCVERS=$(egrep '^glibc-[0-9]' versions.txt | sed -re 's/^.*[A-Za-z]-([0-9\.]+).*/\1/g')
+#HOSTGLIBCVERS="2.11" # <2.13 had serious security issues, we don't want any possible contamination
+HOSTGLIBCVERS="2.13"
+# or, we can detect the host's actual glibc version.
+#HOSTGLIBCVERS=$(/lib/libc.so.6 | egrep 'release\ version\ [0-9\.]+\,? ' | sed -re 's/^.*[[:space:]]+([0-9\.]+)(,|[[:space:]]+).*/\1/g')
 GCCVER=$(egrep '^gcc-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLVER=$(egrep '^perl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLMAJ=$(echo ${PERLVER} | sed -re 's/([0-9]*)\..*$/\1/g')
 TCLVER=$(egrep '^tcl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g' | awk -F. '{print $1"."$2}')
 export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ TLCVER
+
+# Okay, so this would take way too much time...
+#src_core_x () {
+#	cd ${PSRC}
+#	pkg=${1}
+#	rm -rf ${pkg}
+#	tar -C ${PSRC} -Jxf ${PSRC}/pur_src.${PUR_RLS}${RLS_MOD}.tar.xz pur_src/core/${pkg}
+#	mv ${PSRC}/pur_src/core/${pkg} ${PSRC}/${pkg}
+#	rm -rf ${PSRC}/pur_src
+#}
+
+coresrc_prep () {
+	pkg=${1}
+	rm -rf ${PSRC}/${pkg}
+	cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
+	cd ${PSRC}/${pkg}
+}
+
+coresrc_prep2 () {
+	pkg=${1}
+	rm -rf ${PSRC}/${pkg}
+	cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
+	mkdir ${PSRC}/${pkg}/${pkg}-build
+	cd ${PSRC}/${pkg}/${pkg}-build
+}
 
 echo
 
@@ -228,20 +255,17 @@ echo
 
 #binutils first build
 echo "Binutils - first pass."
-mkdir ${PTLS}/lib
+mkdir -p ${PTLS}/lib
 case $(uname -m) in
   x86_64) ln -s /tools/lib /tools/lib64 ;;
 esac
-cd ${PSRC}
-rm -rf binutils-build
-cp -a binutils binutils-build
-cd binutils-build
+coresrc_prep2 binutils
 echo "[Binutils] Configuring..."
-./configure --prefix=/tools     \
-    --with-sysroot=${PUR}       \
-    --with-lib-path=${PTLS}/lib  \
-    --target=${PUR_TGT}         \
-    --disable-nls               \
+../configure --prefix=/tools	\
+    --with-sysroot=${PUR}	\
+    --with-lib-path=/tools/lib	\
+    --target=${PUR_TGT}		\
+    --disable-nls		\
     --disable-werror > ${PLOGS}/binutils_configure.1 2>&1
 
 echo "[Binutils] Building..."
@@ -255,45 +279,37 @@ echo "GCC - first pass."
 #GCC DEPS
 # May want to consider this in the future, just for keeping compat with GCC's suggested practices:
 # Using  ./contrib/download_prerequisites instead of manually grabbing
+coresrc_prep2 gcc
 
-# building MPFR
-echo "[GCC] MPFR"
-cd gcc
-rm -rf gcc-build
-mkdir gcc-build
-cd gcc-build
-cp -a ../../mpfr .
-
-# MPC
-echo "[GCC] MPC"
-cp -a ../../mpc .
-
-#GMP
-echo "[GCC] GMP"
-cp -a ../../gmp .
+for i in mpfr mpc gmp;
+do
+	coresrc_prep ${i}
+	cp -a ${PSRC}/${pkg} ${PSRC}/gcc/.
+done
+cd ${PSRC}/gcc
 
 #GCC TIME BABY OH YEAH
 echo "[GCC] Configuring..."
 for file in $(find gcc/config -name linux64.h -o -name linux.h -o -name sysv4.h);
 do
-  #cp -u ${file}{,.orig}
-  sed -i -re 's@/lib(64)?(32)?/ld@/tools&@g' -e 's@/usr@/tools@g' ${file}
+  cp -u ${file}{,.orig}
   echo "
 #undef STANDARD_STARTFILE_PREFIX_1
 #undef STANDARD_STARTFILE_PREFIX_2
 #define STANDARD_STARTFILE_PREFIX_1 \"${PTLS}/lib/\"
 #define STANDARD_STARTFILE_PREFIX_2 \"\"" >> ${file}
-  #touch ${file}.orig
+  touch ${file}.orig
 done
-../configure					\
+cd ${PSRC}/gcc/gcc-build
+../configure						\
     --target=${PUR_TGT}					\
-    --prefix=${PTLS}					\
+    --prefix=/tools					\
     --with-glibc-version=${HOSTGLIBCVERS}		\
     --with-sysroot=${PUR}				\
     --with-newlib					\
     --without-headers					\
-    --with-local-prefix=${PTLS}				\
-    --with-native-system-header-dir=${PTLS}/include	\
+    --with-local-prefix=/tools				\
+    --with-native-system-header-dir=/tools/include	\
     --disable-nls					\
     --disable-shared					\
     --disable-multilib					\
@@ -311,13 +327,10 @@ echo "[GCC] Building..."
 make > ${PLOGS}/gcc_make.1 2>&1
 make install >> ${PLOGS}/gcc_make.1 2>&1
 cd ${PSRC}
-rm -rf gcc/gcc-build
 
 ## Grabbing latest kernel headers
 echo "[Kernel] Making and installing headers..."
-rm -rf linux-build
-cp -a linux linux-build
-cd linux-build
+coresrc_prep linux
 make mrproper > ${PLOGS}/kernel-headers_make.1 2>&1
 make INSTALL_HDR_PATH=dest headers_install >> ${PLOGS}/kernel-headers_make.1 2>&1
 cp -r dest/include/* ${PTLS}/include
@@ -326,19 +339,16 @@ rm -rf linux-build
 
 # Building glibc - first pass
 echo "GlibC - first pass."
-cd glibc
-rm -rf glibc-build
-mkdir glibc-build
-cd glibc-build
+coresrc_prep2 glibc
 echo "[GlibC] Configuring..."
 ../configure						\
-      --prefix=${PTLS}					\
+      --prefix=/tools					\
       --host=${PUR_TGT}					\
       --build=$(../scripts/config.guess)		\
       --disable-profile					\
       --enable-kernel=2.6.32				\
       --enable-obsolete-rpc				\
-      --with-headers=${PTLS}/include			\
+      --with-headers=/tools/include			\
       libc_cv_forced_unwind=yes				\
       libc_cv_ctors_header=yes				\
       libc_cv_c_cleanup=yes > ${PLOGS}/glibc_configure.1 2>&1
@@ -361,7 +371,6 @@ then
 	rm dummy.c a.out
 else
 	echo "Test Failed. Now Exiting, post glibc build."
-	rm dummy.c a.out
 	exit 1
 fi
 cd ${PSRC}
@@ -369,10 +378,7 @@ rm -rf glibc/glibc-build
 
 #libstc++
 echo "LibstdC++ - first pass."
-cd gcc
-rm -rf gcc-build
-mkdir gcc-build
-cd gcc-build
+coresrc_prep2 gcc
 echo "[LibstdC++] Configuring..."
 ../libstdc++-v3/configure		\
     --host=${PUR_TGT}			\
@@ -396,9 +402,7 @@ rm -rf gcc/gcc-build
 
 # binutils pass 2
 echo "Binutils - second pass."
-rm -rf binutils-build
-cp -a binutils binutils-build
-cd binutils-build
+coresrc_prep2 binutils
 echo "[Binutils] Configuring..."
 CC=${PUR_TGT}-gcc		\
 AR=${PUR_TGT}-ar		\
@@ -422,10 +426,7 @@ rm -rf binutils-build
 
 # GCC round 2
 echo "GCC - second pass."
-cd gcc
-rm -rf gcc-build
-mkdir gcc-build
-cd gcc-build
+coresrc_prep2 gcc
 cd ${PTLS}/lib
 cat gcc/${PUR_TGT}/${GCCVER}/plugin/include/limitx.h	\
  gcc/${PUR_TGT}/${GCCVER}/plugin/include/glimits.h	\
@@ -435,31 +436,36 @@ do
   cp -u ${file}{,.orig}
   sed -re 's@/lib(64)?(32)?/ld@/tools&@g' \
       -e 's@/usr@/tools@g' ${file}.orig > ${file}
-  echo '
+  echo "
 #undef STANDARD_STARTFILE_PREFIX_1
 #undef STANDARD_STARTFILE_PREFIX_2
-#define STANDARD_STARTFILE_PREFIX_1 "/tools/lib/"
-#define STANDARD_STARTFILE_PREFIX_2 ""' >> ${file}
+#define STANDARD_STARTFILE_PREFIX_1 \"${PTLS}/lib/\"
+#define STANDARD_STARTFILE_PREFIX_2 \"\"" >> ${file}
   touch ${file}.orig
 done
-cd ${PSRC}/gcc/gcc-build
+for i in mpfr mpc gmp;
+do
+	coresrc_prep ${i}
+done
+cd ${PSRC}/gcc
 
 echo "[GCC] MPFR"
-cp -a ../../mpfr .
+cp -a ../mpfr .
 
 echo "[GCC] MPC"
-cp -a ../../mpc .
+cp -a ../mpc .
 
 echo "[GCC] GMP"
-cp -a ../../gmp .
+cp -a ../gmp .
 
+cd ${PSRC}/gcc/gcc-build
 find ./ -name 'config.cache' -exec rm -rf '{}' \;
 echo "[GCC] Configuring..."
 CC=${PUR_TGT}-gcc					\
 CXX=${PUR_TGT}-g++					\
 AR=${PUR_TGT}-ar					\
 RANLIB=${PUR_TGT}-ranlib				\
-../gcc-build/configure						\
+../configure						\
     --prefix=${PTLS}					\
     --with-local-prefix=${PTLS}				\
     --with-native-system-header-dir=${PTLS}/include	\
@@ -493,9 +499,8 @@ rm -rf gcc/gcc-build
 ## Tests
 echo "Running further tests..."
 # TCL
-rm -rf tcl-build
-cp -a tcl tcl-build
-cd tcl-build/unix
+coresrc_prep tcl
+cd unix
 echo "[TCL] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/tcl_configure.1 2>&1
 echo "[TCL] Building..."
@@ -509,9 +514,7 @@ cd ${PSRC}
 rm -rf tcl-build
 
 #Expect
-rm -rf expect-build
-cp -a expect expect-build
-cd expect-build
+coresrc_prep expect
 echo "[Expect] Configuring..."
 sed -i -e 's:/usr/local/bin:/bin:' configure
 ./configure --prefix=${PTLS}		\
@@ -526,9 +529,7 @@ cd ${PSRC}
 rm -rf expect-build
 
 #DejaGNU
-rm -rf dejagnu-build
-cp -a dejagnu deagnu-build
-cd dejagnu-build
+coresrc_prep dejagnu
 echo "[DejaGNU] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/dejagnu_configure.1 2>&1
 
@@ -539,9 +540,7 @@ cd ${PSRC}
 rm -rf dejagnu-build
 
 #check
-rm -rf check-build
-cp -a check check-build
-cd check-build
+coresrc_prep check
 echo "[Check] Configuring..."
 # this is necessary since we download from git rather than sourceforge. fuck sourceforge.
 autoreconf --install
@@ -555,9 +554,7 @@ cd ${PSRC}
 rm -rf check-build
 
 #ncurses
-rm -rf ncurses-build
-cp -a ncurses ncurses-build
-cd ncurses-build
+coresrc_prep ncurses
 echo "[nCurses] Configuring..."
 sed -i -e 's/mawk//' configure
 ./configure --prefix=${PTLS}	\
@@ -574,9 +571,7 @@ cd ${PSRC}
 rm -rf ncurses-build
 
 #bash
-rm -rf bash-build
-cp -a bash bash-build
-cd bash-build
+coresrc_prep bash
 echo "[Bash] Configuring..."
 ./configure --prefix=${PTLS} --without-bash-malloc > ${PLOGS}/bash_configure.1 2>&1
 
@@ -589,9 +584,7 @@ cd ${PSRC}
 rm -rf bash-build
 
 #Bzip2
-rm -rf bzip2-build
-cp -a bzip2 bzip2-build
-cd bzip2-build
+coresrc_prep bzip2
 echo "[Bzip2] Building..."
 make > ${PLOGS}/bzip2_make.1 2>&1
 make PREFIX=${PTLS} install >> ${PLOGS}/bzip2_make.1 2>&1
@@ -599,9 +592,7 @@ cd ${PSRC}
 rm -rf bzip2-build
 
 #Coreutils
-rm -rf coreutils-build
-cp -a coreutils coreutils-build
-cd coreutils-build
+coresrc_prep coreutils
 echo "[Coreutils] Configuring..."
 ./configure --prefix=${PTLS} --enable-install-program=hostname > ${PLOGS}/coreutils_configure.1 2>&1
 
@@ -613,9 +604,7 @@ cd ${PSRC}
 rm -rf coreutils-build
 
 #Diffutils
-rm -rf diffutils-build
-cp -a diffutils diffutils-build
-cd diffutils-build
+coresrc_prep diffutils
 echo "[Diffutils] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/diffutils_configure.1 2>&1
 
@@ -627,9 +616,7 @@ cd ${PSRC}
 rm -rf diffutils-build
 
 # File
-rm -rf file-build
-cp -a file file-build
-cd file-build
+coresrc_prep file
 echo "[File] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/file_configure.1 2>&1
 
@@ -641,9 +628,7 @@ cd ${PSRC}
 rm -rf file-build
 
 # Findutils
-rm -rf findutils-build
-cp -a findutils findutils-build
-cd findutils-build
+coresrc_prep findutils
 echo "[Findutils] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/findutils_configure.1 2>&1
 
@@ -655,9 +640,7 @@ cd ${PSRC}
 rm -rf findutils-build
 
 # GAWK
-rm -rf gawk-build
-cp -a gawk gawk-build
-cd gawk-build
+coresrc_prep gawk
 echo "[Gawk] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/gawk_configure.1 2>&1
 
@@ -669,9 +652,7 @@ cd ${PSRC}
 rm -rf gawk-build
 
 #gettext
-rm -rf gettext-build
-cp -a gettext gettext-build
-cd gettext-build/gettext-tools
+coresrc_prep gettext
 echo "[Gettext] Configuring..."
 EMACS="no" ./configure --prefix=${PTLS} --disable-shared > ${PLOGS}/gettext_configure.1 2>&1
 
@@ -686,9 +667,7 @@ cd ${PSRC}
 rm -rf gettext-build
 
 # GNU Grep
-rm -rf grep-build
-cp -a grep grep-build
-cd grep-build
+coresrc_prep grep
 echo "[Grep] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/grep_configure.1 2>&1
 
@@ -700,9 +679,7 @@ cd ${PSRC}
 rm -rf grep-build
 
 # GNU GZip
-rm -rf gzip-build
-cp -a gzip gzip-build
-cd gzip-build
+coresrc_prep gzip
 echo "[Gzip] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/gzip_configure.1 2>&1
 
@@ -714,9 +691,7 @@ cd ${PSRC}
 rm -rf gzip-build
 
 # M4
-rm -rf m4-build
-cp -a m4 m4-build
-cd m4-build
+coresrc_prep m4
 echo "[M4] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/m4_configure.1 2>&1
 
@@ -728,9 +703,7 @@ cd ${PSRC}
 rm -rf m4-build
 
 # GNU Make
-rm -rf make-build
-cp -a make make-build
-cd make-build
+coresrc_prep make
 echo "[Make] Configuring..."
 ./configure --prefix=${PTLS} --without-guile > ${PLOGS}/make_configure.1 2>&1
 
@@ -742,9 +715,7 @@ cd ${PSRC}
 rm -rf make-build
 
 #GNU Patch
-rm -rf patch-build
-cp -a patch patch-build
-cd patch-build
+coresrc_prep patch
 echo "[Patch] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/patch_configure.1 2>&1
 
@@ -756,9 +727,7 @@ cd ${PSRC}
 rm -rf patch-build
 
 # Perl (Will be removed from Base eventually/hopefully)
-rm -rf perl-build
-cp -a perl perl-build
-cd perl-build
+coresrc_prep perl
 echo "[Perl] Configuring..."
 sh Configure -des -Dprefix=${PTLS} -Dlibs=-lm > ${PLOGS}/perl_configure.1 2>&1
 
@@ -771,9 +740,7 @@ cd ${PSRC}
 rm -rf perl-build
 
 #GNU Sed
-rm -rf sed-build
-cp -a sed sed-build
-cd sed-build
+coresrc_prep sed
 echo "[Sed] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/sed_configure.1 2>&1
 
@@ -785,9 +752,7 @@ cd ${PSRC}
 rm -rf sed-build
 
 #GNU Tar
-rm -rf tar-build
-cp -a tar tar-build
-cd tar-build
+coresrc_prep tar
 echo "[Tar] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/tar_configure.1 2>&1
 
@@ -799,9 +764,7 @@ cd ${PSRC}
 rm -rf tar-build
 
 #GNU Texinfo
-rm -rf texinfo-build
-cp -a texinfo texinfo-build
-cd texinfo-build
+coresrc_prep texinfo
 echo "[Texinfo] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/texinfo_configure.1 2>&1
 
@@ -813,9 +776,7 @@ cd ${PSRC}
 rm -rf texinfo-build
 
 # Util-Linux
-rm -rf util-linux-build
-cp -a util-linux util-linux-build
-cd util-linux-build
+coresrc_prep util-linux
 echo "[Util-Linux] Configuring..."
 ./configure --prefix=${PTLS}			\
             --without-python			\
@@ -830,9 +791,7 @@ cd ${PSRC}
 rm -rf util-linux-build
 
 #Xz
-rm -rf xz-build
-cp -a xz xz-build
-cd xz-build
+coresrc_prep xz
 echo "[Xz] Configuring..."
 ./configure --prefix=${PTLS} > ${PLOGS}/xz_configure.1 2>&1
 
