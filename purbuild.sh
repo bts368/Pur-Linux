@@ -14,7 +14,13 @@ fi
 # RELEASE VERSION #
 PUR_RLS="2016.04"
 RLS_MOD="-RELEASE"
-RLS_URL="http://g.rainwreck.com/pur"
+# for testing...
+if [[ "$(whoami)" == "bts" ]];
+then
+	RLS_URL="http://10.1.1.1/pur"
+else
+	RLS_URL="http://g.rainwreck.com/pur"
+fi
 
 purlogo() {
 cat <<"EOT"
@@ -82,7 +88,8 @@ then
         exit 1
 fi
 
-if [[ "$(whoami)" == "root" ]]; then
+if [[ "$(whoami)" == "root" ]];
+then
         echo " /!\ /!\ /!\ WARNING WARNING WARNING /!\ /!\ /!\ /!\ "
         echo " Don't run me as root. Create a new user!!      "
         echo "/!\ /!\ /!\ WARNING WARNING WARNING /!\ /!\ /!\ /!\ "
@@ -92,7 +99,8 @@ fi
 echo
 
 # Are we using curl or wget?
-if ! type curl > /dev/null 2>&1; then
+if ! type curl > /dev/null 2>&1;
+then
         fetch_cmd="$(which wget) -c --progress=bar --tries=5 --waitretry 3 -a /tmp/fetch.log"
 else
         fetch_cmd="$(which curl) --progress-bar -LSOf --retry 5 --retry-delay 3 -C -"
@@ -254,15 +262,15 @@ cd gcc
 rm -rf gcc-build
 mkdir gcc-build
 cd gcc-build
-cp -a ../mpfr .
+cp -a ../../mpfr .
 
 # MPC
 echo "[GCC] MPC"
-cp -a ../mpc .
+cp -a ../../mpc .
 
 #GMP
 echo "[GCC] GMP"
-cp -a ../gmp .
+cp -a ../../gmp .
 
 #GCC TIME BABY OH YEAH
 echo "[GCC] Configuring..."
@@ -379,7 +387,7 @@ echo "[LibstdC++] Building..."
 make > ${PLOGS}/libstdc++_make.1 2>&1
 make install >> ${PLOGS}/libstdc++_make.1 2>&1
 cd ${PSRC}
-rm -rf gcc-build
+rm -rf gcc/gcc-build
 
 
 ##############################
@@ -414,9 +422,10 @@ rm -rf binutils-build
 
 # GCC round 2
 echo "GCC - second pass."
-rm -rf gcc-build gcc-build2
-mkdir gcc-build2
-cp -a gcc gcc-build
+cd gcc
+rm -rf gcc-build
+mkdir gcc-build
+cd gcc-build
 cd ${PTLS}/lib
 cat gcc/${PUR_TGT}/${GCCVER}/plugin/include/limitx.h	\
  gcc/${PUR_TGT}/${GCCVER}/plugin/include/glimits.h	\
@@ -433,16 +442,16 @@ do
 #define STANDARD_STARTFILE_PREFIX_2 ""' >> ${file}
   touch ${file}.orig
 done
-cd ${PSRC}/gcc-build2
+cd ${PSRC}/gcc/gcc-build
 
 echo "[GCC] MPFR"
-cp -a ../mpfr .
+cp -a ../../mpfr .
 
 echo "[GCC] MPC"
-cp -a ../mpc .
+cp -a ../../mpc .
 
 echo "[GCC] GMP"
-cp -a ../gmp .
+cp -a ../../gmp .
 
 find ./ -name 'config.cache' -exec rm -rf '{}' \;
 echo "[GCC] Configuring..."
@@ -479,7 +488,7 @@ else
         exit 1
 fi
 cd ${PSRC}
-rm -rf gcc-build gcc-build2
+rm -rf gcc/gcc-build
 
 ## Tests
 echo "Running further tests..."
