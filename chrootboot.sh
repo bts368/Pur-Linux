@@ -376,7 +376,9 @@ cd ..
 # GCC
 rm -rf gcc-build
 mkdir gcc-build
-cd gcc-build
+cd gcc
+cd ../gcc-build
+#make distclean > ${PLOGS}/gcc_clean.1 2>&1
 echo "[GCC] Configuring..."
 SED=sed
 ../gcc/configure --prefix=/usr		\
@@ -389,7 +391,9 @@ echo "[GCC] Building..."
 make > ${PLOGS}/gcc_make.1 2>&1
 # gorram gcc. might not be necessary, but we're "inside" the PUR root at this point, so...
 ulimit -s 32768
+set +e
 make -k check > ${PLOGS}/gcc_check.1 2>&1
+set -e
 ../gcc/contrib/test_summary >> ${PLOGS}/gcc_check.1 2>&1
 make install >> ${PLOGS}/gcc_make.1 2>&1
 ln -s /usr/bin/cpp /lib
@@ -399,7 +403,7 @@ ln -sf ../../libexec/gcc/$(gcc -dumpmachine)/${GCCVER}/liblto_plugin.so /usr/lib
 echo 'int main(){}' > dummy.c
 cc dummy.c -v -Wl,--verbose &> dummy.log
 
-readelf -l a.out | grep ': /lib' | grep -q '[Requesting program interpreter: /lib/ld-linux.so.2]'
+readelf -l a.out | grep ': /lib' | egrep -Eq '[Requesting program interpreter: /lib(64)?/ld-linux(-(x86_64|i686))?.so.2]'
 if [[ "${?}" != '0' ]];
 then
 	echo "Interpreter failed; bailing out."
