@@ -1,6 +1,11 @@
 #!/tools/bin/bash
 
+env -i HOME=${HOME} TERM=${TERM} PS1='\u:\w\$ ' > /dev/null 2>&1
 set +h
+umask 022 
+echo
+set +h
+
 set -e
 if [ "${PS4}" == 'Line ${LINENO}: ' ];
 then
@@ -9,9 +14,11 @@ fi
 
 PUR="/"
 PSRC="/sources"
+PTLS="/tools"
 PCNTRB="/contrib"
-export PUR PSRC PCNTRB
+export PUR PSRC PCNTRB PTLS
 
+ulimit -n 512
 
 # /dev will be handled by eudev. -bts 
 echo "Making directory tree..."
@@ -35,11 +42,11 @@ ln -sf /run /var/run
 ln -sf /run/lock /var/lock
 mkdir -p /var/{opt,cache,lib/{color,misc,locate},local}
 
-ln -sf /tools/bin/{bash,cat,echo,pwd,stty} /bin
-ln -sf /tools/bin/perl /usr/bin
-ln -sf /tools/lib/libgcc_s.so{,.1} /usr/lib
-ln -sf /tools/lib/libstdc++.so{,.6} /usr/lib
-sed -e 's/tools/usr/' /tools/lib/libstdc++.la > /usr/lib/libstdc++.la
+ln -sf ${PTLS}/bin/{bash,cat,echo,pwd,stty} /bin
+ln -sf ${PTLS}/bin/perl /usr/bin
+ln -sf ${PTLS}/lib/libgcc_s.so{,.1} /usr/lib
+ln -sf ${PTLS}/lib/libstdc++.so{,.6} /usr/lib
+sed -e "s@${PTLS}@/usr@" ${PTLS}/lib/libstdc++.la > /usr/lib/libstdc++.la
 ln -sf bash /bin/sh
 
 ln -sf /proc/self/mounts /etc/mtab
@@ -87,33 +94,66 @@ PLOGS=/var/log/pur_install
 rm -rf ${PLOGS}
 mkdir -p ${PLOGS}
 
+coresrc_prep () {
+        pkg=${1}
+        if [ -z "${pkg}" ];
+        then
+                echo "WARNING: coresrc_prep called with no packagename!"
+                exit 1
+        fi
+        rm -rf ${PSRC}/${pkg}
+        cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
+        cd ${PSRC}/${pkg}
+}
+
+coresrc_prep2 () {
+        pkg=${1}
+        if [ -z "${pkg}" ];
+        then
+                echo "WARNING: coresrc_prep2 called with no packagename!"
+                exit 1
+        fi
+        rm -rf ${PSRC}/${pkg}
+        cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
+        mkdir ${PSRC}/${pkg}/${pkg}-build
+        cd ${PSRC}/${pkg}/${pkg}-build
+}
+
+coresrc_clean () {
+        pkg=${1}
+        if [ -z "${pkg}" ];
+        then
+                echo "WARNING: coresrc_clean called with no packagename!"
+                exit 1
+        fi
+        cd ${PSRC}
+        rm -rf ${PSRC}/${pkg}
+}
 
 
 # linux headers
 echo "[Kernel] Cleaning sources for headers..."
-cd /sources/linux
+coresrc_prep linux
 make mrproper > ${PLOGS}/kernel-headers_clean.1 2>&1
 
 echo "[Kernel] Building headers..."
 make INSTALL_HDR_PATH=dest headers_install > ${PLOGS}/kernel-headers_make.1 2>&1
 find dest/include \( -name .install -o -name ..install.cmd \) -delete > /dev/null 2>&1
 cp -r dest/include/* /usr/include
-cd ..
+coresrc_clean linux
 
 
 # man pages
 echo "[Man pages] Installing..."
-cd man-pages
+coresrc_prep man-pages
 make install > ${PLOGS}/man_make.1 2>&1
-cd ..
+coresrc_clean man-pages
 
 
 # glibc
 echo "[GLibC] Configuring..."
-rm -rf glibc-build
-mkdir glibc-build
-cd glibc-build
-../glibc/configure		\
+coresrc_prep2 glibc
+../configure		\
 	--prefix=/usr		\
 	--disable-profile	\
 	--enable-kernel=2.6.32	\
@@ -128,7 +168,7 @@ make check > ${PLOGS}/glibc_check.1 2>&1
 set -e
 touch /etc/ld.so.conf
 make install >> ${PLOGS}/glibc_make.1 2>&1
-cp ../glibc/nscd/nscd.conf /etc/nscd.conf
+cp ../nscd/nscd.conf /etc/nscd.conf
 mkdir -p /var/cache/nscd
 mkdir -p /usr/lib/locale
 localedef -i cs_CZ -f UTF-8 cs_CZ.UTF-8
@@ -168,11 +208,11 @@ ethers: files
 rpc: files
 # End /etc/nsswitch.conf
 EOF
-cd ..
+coresrc_clean glibc
 
 # timezone data
 echo "Timezone data..."
-cd ${PSRC}/tzdata
+coresrc_prep tzdata
 ZONEINFO=/usr/share/zoneinfo
 mkdir -p ${ZONEINFO}/{posix,right}
 for tz in etcetera southamerica northamerica europe africa antarctica asia australasia backward pacificnew systemv;
@@ -204,14 +244,11 @@ mkdir -p /etc/ld.so.conf.d
 
 # toolchain modifications...
 echo "Modifying the toolchain..."
-mv /tools/bin/{ld,ld-old}
-mv /tools/$(uname -m)-pc-linux-gnu/bin/{ld,ld-old}
-mv /tools/bin/{ld-new,ld}
-ln -s /tools/bin/ld /tools/$(uname -m)-pc-linux-gnu/bin/ld
-gcc -dumpspecs | sed -e 's@/tools@@g'			    \
-	-e '/\*startfile_prefix_spec:/{n;s@.*@/usr/lib/ @}' \
-	-e '/\*cpp:/{n;s@$@ -isystem /usr/include@}' > \
-	$(dirname $(gcc --print-libgcc-file-name))/specs
+mv ${PTLS}/bin/{ld,ld-old}
+mv ${PTLS}/$(uname -m)-pc-linux-gnu/bin/{ld,ld-old}
+mv ${PTLS}/bin/{ld-new,ld}
+ln -s ${PTLS}/bin/ld ${PTLS}/$(uname -m)-pc-linux-gnu/bin/ld
+gcc -dumpspecs | sed -e "s@${PTLS}@@g" -e '/\*startfile_prefix_spec:/{n;s@.*@/usr/lib/ @}' -e '/\*cpp:/{n;s@$@ -isystem /usr/include@}' > $(dirname $(gcc --print-libgcc-file-name))/specs
 echo 'int main(){}' > dummy.c
 cc dummy.c -v -Wl,--verbose &> dummy.log
 readelf -l a.out | grep -q ': /lib'
@@ -253,11 +290,11 @@ then
 	exit 1
 fi
 rm dummy.c a.out dummy.log
-cd ..
+coresrc_clean tzdata
 
 
 # zlib
-cd zlib
+coresrc_prep zlib
 echo "[Zlib] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/zlib_configure.1 2>&1
 
@@ -266,17 +303,17 @@ make > ${PLOGS}/zlib_make.1 2>&1
 make install >> ${PLOGS}/zlib_make.1 2>&1
 mv /usr/lib/libz.so.* /lib
 ln -sf ../../lib/$(readlink /usr/lib/libz.so) /usr/lib/libz.so
-cd ..
+coresrc_clean zlib
 
 # file
-cd file
+coresrc_prep file
 echo "[File] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/file_configure.1 2>&1
 
 echo "[File] Building..."
 make > ${PLOGS}/file_make.1 2>&1
 make install > ${PLOGS}/file_make.1 2>&1
-cd ..
+coresrc_clean file
 
 # binutils
 expect -c "spawn ls" | egrep -Eq '^spawn ls[[:space:]]*$'
@@ -285,25 +322,23 @@ then
 	echo "Your PTY allocation is failing. Bailing out..."
 	exit 1
 fi
-rm -rf binutils-build
-mkdir binutils-build
-cd binutils-build
+coresrc_prep2 binutils
 echo "[Binutils] Configuring..."
-../binutils/configure --prefix=/usr	\
+../configure --prefix=/usr		\
 			--enable-shared \
 			--disable-werror > ${PLOGS}/binutils_configure.1 2>&1
 
 echo "[Binutils] Building..."
 make tooldir=/usr > ${PLOGS}/binutils_make.1 2>&1
 set +e
-make check > ${PLOGS}/binutils_check.1 2>&1
+#make check > ${PLOGS}/binutils_check.1 2>&1
 set -e
 make tooldir=/usr install >> ${PLOGS}/binutils_make.1 2>&1
-cd ..
+coresrc_clean binutils
 
 
 # GMP
-cd gmp
+coresrc_prep gmp
 echo "[GMP] Configuring..."
 ./configure --prefix=/usr	\
 	--enable-cxx		\
@@ -313,9 +348,7 @@ echo "[GMP] Configuring..."
 echo "[GMP] Building..."
 make > ${PLOGS}/gmp_make.1 2>&1
 # keeps failing...??
-set +e
 make html >> ${PLOGS}/gmp_make.1 2>&1
-set -e
 echo "[GMP] Running tests..."
 make check > ${PLOGS}/gmp_check.1 2>&1
 linecnt=$(awk '/tests passed/{total+=$2} ; END{print total}' ${PLOGS}/gmp_check.1 | wc -l)
@@ -325,14 +358,12 @@ then
 	exit 1
 fi
 make install >> ${PLOGS}/gmp_make.1 2>&1
-set +e
 make install-html >> ${PLOGS}/gmp_make.1 2>&1
-set -e
-cd ..
+coresrc_clean gmp
 
 
 # MPFR
-cd mpfr
+coresrc_prep mpfr
 echo "[MPFR] Configuring..."
 ./configure --prefix=/usr	\
 	--disable-static	\
@@ -342,19 +373,15 @@ echo "[MPFR] Configuring..."
 echo "[MPFR] Building..."
 make > ${PLOGS}/mpfr_make.1 2>&1
 # gorram it.
-set +e
 make html >> ${PLOGS}/mpfr_make.1 2>&1
-set -e
 #make check > ${PLOGS}/mpfr_check.1 2>&1
 make install >> ${PLOGS}/mpfr_make.1 2>&1
-set +e
 make install-html >> ${PLOGS}/mpfr_make.1 2>&1
-set -e
-cd ..
+coresrc_clean mpfr
 
 
 # MPC
-cd mpc
+coresrc_prep mpc
 echo "[MPC] Configuring..."
 ./configure --prefix=/usr	\
 	--disable-static	\
@@ -362,26 +389,19 @@ echo "[MPC] Configuring..."
 
 echo "[MPC] Building..."
 make > ${PLOGS}/mpc_make.1 2>&1
-set +e
 make html >> ${PLOGS}/mpc_make.1 2>&1
-set -e
 #make check > ${PLOGS}/mpc_check.1 2>&1
 make install >> ${PLOGS}/mpc_make.1 2>&1
-set +e
 make install-html >> ${PLOGS}/mpc_make.1 2>&1
-set -e
-cd ..
+coresrc_clean mpc
 
 
 # GCC
-rm -rf gcc-build
-mkdir gcc-build
-cd gcc
-cd ../gcc-build
+coresrc_prep2 gcc
 #make distclean > ${PLOGS}/gcc_clean.1 2>&1
 echo "[GCC] Configuring..."
 SED=sed
-../gcc/configure --prefix=/usr		\
+../configure --prefix=/usr		\
 	--enable-languages=c,c++	\
 	--disable-multilib		\
 	--disable-bootstrap		\
@@ -392,9 +412,9 @@ make > ${PLOGS}/gcc_make.1 2>&1
 # gorram gcc. might not be necessary, but we're "inside" the PUR root at this point, so...
 ulimit -s 32768
 set +e
-make -k check > ${PLOGS}/gcc_check.1 2>&1
+#make -k check > ${PLOGS}/gcc_check.1 2>&1
 set -e
-../gcc/contrib/test_summary >> ${PLOGS}/gcc_check.1 2>&1
+../contrib/test_summary >> ${PLOGS}/gcc_check.1 2>&1
 make install >> ${PLOGS}/gcc_make.1 2>&1
 ln -s /usr/bin/cpp /lib
 ln -s gcc /usr/bin/cc
@@ -403,44 +423,51 @@ ln -sf ../../libexec/gcc/$(gcc -dumpmachine)/${GCCVER}/liblto_plugin.so /usr/lib
 echo 'int main(){}' > dummy.c
 cc dummy.c -v -Wl,--verbose &> dummy.log
 
-readelf -l a.out | grep ': /lib' | egrep -Eq '[Requesting program interpreter: /lib(64)?/ld-linux(-(x86_64|i686))?.so.2]'
-if [[ "${?}" != '0' ]];
+echo "[GCC] Running sanity checks..."
+if readelf -l a.out | grep ': /lib' | egrep -Eq '[Requesting program interpreter: /lib(64)?/ld-linux(-(x86_64|i686))?.so.2]';
 then
+	echo "Interpreter OK; continuing..."
+else
 	echo "Interpreter failed; bailing out."
 	exit 1
 fi
 
-grep -o '/usr/lib.*/crt[1in].*succeeded' dummy.log | egrep -q "/usr/lib/gcc/$(uname -m)-pc-linux-gnu/${GCCVER}/../../../crt(1|i|n)\.o\ succeeded"
-if [[ "${?}" != '0' ]];
+if grep -o '/usr/lib.*/crt[1in].*succeeded' dummy.log | egrep -Eq "^/usr/lib(64|32)?/(gcc/)?$(uname -m).*(lib(64|32)?/)?crt[1in]\.o\ succeeded$";
 then
+	echo "Startup files correct; continuing..."
+else
 	echo "Startup files incorrect; bailing out."
 	exit 1
 fi
 
-grep -B4 '^ /usr/include' dummy.log | grep -q "/usr/lib/gcc/$(uname -m)-pc-linux-gnu/${GCCVER}/include-fixed"
-if [[ "${?}" != '0' ]];
+if grep -B4 '^ /usr/include' dummy.log | egrep -Eq "/usr/(lib/gcc/$(uname -m).*/${GCCVER}/include(-fixed)?|(local/)?include)";
 then
+	echo "Header files correct; continuing..."
+else
 	echo "Header files incorrect; bailing out..."
 	exit 1
 fi
 
-grep 'SEARCH.*/usr/lib' dummy.log | sed 's|; |\n|g' | grep -q "SEARCH_DIR(\"/usr/lib64\")"
-if [[ "${?}" != '0' ]];
+if grep 'SEARCH.*/usr/lib' dummy.log | sed 's|; |\n|g' | egrep -Eq '^SEARCH_DIR\("/usr/lib(64|32)?"\)';
 then
+	echo "Paths correct; continuing..."
+else
 	echo "Paths incorrect; bailing out..."
 	exit 1
 fi
 
-grep "/lib.*/libc.so.6 " dummy.log | grep -q 'attempt to open /lib/libc.so.6 succeeded'
-if [[ "${?}" != '0' ]];
+if grep "/lib.*/libc.so.6 " dummy.log | egrep -Eq '^attempt\ to\ open\ /lib(32|64)?/libc\.so\.6\ succeeded$';
 then
+	echo "Correct LIBC being used; continuing..."
+else
 	echo "Incorrect libc being used; bailing out..."
 	exit 1
 fi
 
-grep found dummy.log | grep -q 'found ld-linux.so.2 at /lib/ld-linux.so.2'
-if [[ "${?}" != '0' ]];
+if grep found dummy.log | egrep -q '^found ld-linux-x86-64.so.2 at /lib64/ld-linux-x86-64.so.2$';
 then
+	echo "Correct dynamic linker being used; continuing..."
+else
 	echo "Incorrect dynamic linker being used; bailing out..."
 	exit 1
 fi
@@ -448,12 +475,12 @@ fi
 rm dummy.c a.out dummy.log
 mkdir -p /usr/share/gdb/auto-load/usr/lib
 mv /usr/lib/*gdb.py /usr/share/gdb/auto-load/usr/lib
-cd ..
+coresrc_clean gcc
 
 # Bzip2
-cd bzip2
-sed -i 's@\(ln -s -f \)$(PREFIX)/bin/@\1@' Makefile
-sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+coresrc_prep bzip2
+sed -i -re 's@(ln -s -f )$\(PREFIX\)/bin/@\1@' Makefile
+sed -i -e "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
 
 echo "[Bzip2] Building..."
 make -f Makefile-libbz2_so > ${PLOGS}/bzip2_make.1 2>&1
@@ -466,11 +493,11 @@ ln -s ../../lib/libbz2.so.1.0 /usr/lib/libbz2.so
 rm /usr/bin/{bunzip2,bzcat,bzip2}
 ln -s bzip2 /bin/bunzip2
 ln -s bzip2 /bin/bzcat
-cd ..
+coresrc_clean bzip2
 
 
 # Pkg-config
-cd pkg-config
+coresrc_prep pkg-config
 echo "[Pkg-config] Configuring..."
 ./configure --prefix=/usr	\
 	--with-internal-glib	\
@@ -481,13 +508,13 @@ echo "[Pkg-config] Building..."
 make > ${PLOGS}/pkg-config_make.1 2>&1
 #make check > ${PLOGS}/pkg-config_check.1 2>&1
 make install >> ${PLOGS}/pkg-config_make.1 2>&1
-cd ..
+coresrc_clean pkg-config
 
 
 # nCurses
-cd ncurses
+coresrc_prep ncurses
 echo "[nCurses] Configuring..."
-sed -i '/LIBTOOL_INSTALL/d' c++/Makefile.in
+sed -i -e '/LIBTOOL_INSTALL/d' c++/Makefile.in
 ./configure --prefix=/usr	\
 	--mandir=/usr/share/man	\
 	--with-shared		\
@@ -510,11 +537,11 @@ done
 rm -f /usr/lib/libcursesw.so
 echo "INPUT(-lncursesw)" > /usr/lib/libcursesw.so
 ln -sf libncurses.so /usr/lib/libcurses.so
-cd ..
+coresrc_clean ncurses
 
 
 # attr
-cd attr
+coresrc_prep attr
 echo "[Attr] Configuring..."
 sed -i -e 's|/@pkg_name@|&-@pkg_version@|' include/builddefs.in
 sed -i -e "/SUBDIRS/s|man[25]||g" man/Makefile
@@ -532,15 +559,15 @@ make install install-dev install-lib >> ${PLOGS}/attr_make.1 2>&1
 chmod 755 /usr/lib/libattr.so
 mv /usr/lib/libattr.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libattr.so) /usr/lib/libattr.so
-cd ..
+coresrc_clean attr
 
 
 # Acl
-cd acl
+coresrc_prep acl
 echo "[Acl] Configuring..."
 sed -i -e 's|/@pkg_name@|&-@pkg_version@|' include/builddefs.in
-sed -i "s:| sed.*::g" test/{sbits-restore,cp,misc}.test
-sed -i -e "/TABS-1;/a if (x > (TABS-1)) x = (TABS-1);" libacl/__acl_to_any_text.c
+sed -i -e 's:| sed.*::g' test/{sbits-restore,cp,misc}.test
+sed -i -e '/TABS-1;/a if (x > (TABS-1)) x = (TABS-1);' libacl/__acl_to_any_text.c
 ./configure --prefix=/usr	\
 	--bindir=/bin		\
 	--disable-static	\
@@ -552,27 +579,27 @@ make install install-dev install-lib >> ${PLOGS}/acl_make.1 2>&1
 chmod 755 /usr/lib/libacl.so
 mv /usr/lib/libacl.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libacl.so) /usr/lib/libacl.so
-cd ..
+coresrc_clean acl
 
 
 # Libcap
-cd libcap
+coresrc_prep libcap
 echo "[LibCap] Building..."
-sed -i '/install.*STALIBNAME/d' libcap/Makefile
+sed -i -e '/install.*STALIBNAME/d' libcap/Makefile
 make > ${PLOGS}/libcap_make.1 2>&1
 make RAISE_SETFCAP=no prefix=/usr install >> ${PLOGS}/libcap_make.1 2>&1
 chmod 755 /usr/lib/libcap.so
 mv /usr/lib/libcap.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libcap.so) /usr/lib/libcap.so
-cd ..
+coresrc_clean libcap
 
 
 # Sed
-cd sed
+coresrc_prep sed
 echo "[Sed] Configuring..."
 ./configure --prefix=/usr --bindir=/bin --htmldir=/usr/share/doc/sed > ${PLOGS}/sed_configure.1 2>&1
 
-echo "[Sed] BUilding..."
+echo "[Sed] Building..."
 make > ${PLOGS}/sed_make.1 2>&1
 set +e
 make html >> ${PLOGS}/sed_make.1 2>&1
@@ -582,13 +609,13 @@ make install >> ${PLOGS}/sed_make.1 2>&1
 set +e
 make -C doc install-html >> ${PLOGS}/sed_make.1 2>&1
 set -e
-cd ..
+coresrc_clean sed
 
 
 # Shadow
-cd shadow
+coresrc_prep shadow
 echo "[Shadow] Configuring..."
-sed -i 's/groups$(EXEEXT) //' src/Makefile.in
+sed -i -e 's/groups$(EXEEXT) //' src/Makefile.in
 find man -name Makefile.in -exec sed -i 's/groups\.1 / /'   {} \;
 find man -name Makefile.in -exec sed -i 's/getspnam\.3 / /' {} \;
 find man -name Makefile.in -exec sed -i 's/passwd\.5 / /'   {} \;
@@ -604,11 +631,11 @@ pwconv >> ${PLOGS}/shadow_configure.1 2>&1
 grpconv >> ${PLOGS}/shadow_configure.1 2>&1
 sed -i -e 's/1000/100/g' /etc/default/useradd
 passwd -e root
-cd ..
+coresrc_clean shadow
 
 
 # Psmisc
-cd psmisc
+coresrc_prep psmisc
 echo "[PSmisc] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/psmisc_configure.1 2>&1
 
@@ -617,11 +644,11 @@ make > ${PLOGS}/psmisc_make.1 2>&1
 make install >> ${PLOGS}/psmisc_make.1 2>&1
 mv /usr/bin/fuser /bin
 mv /usr/bin/killall /bin
-cd ..
+coresrc_clean psmisc
 
 
 # Procps-NG
-cd procps-ng
+coresrc_prep procps-ng
 echo "[ProcPS-NG] Configuring..."
 ./configure --prefix=/usr				\
 	--exec-prefix=					\
@@ -637,17 +664,15 @@ sed -i -r 's|(pmap_initname)\\\$|\1|' testsuite/pmap.test/pmap.exp
 make install >> ${PLOGS}/procps-ng_make.1 2>&1
 mv /usr/lib/libprocps.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libprocps.so) /usr/lib/libprocps.so
-cd ..
+coresrc_clean procps-ng
 
 
 # e2fsprogs
-rm -rf e2fsprogs-build
-mkdir -p e2fsprogs-build
-cd e2fsprogs-build
+coresrc_prep2 e2fsprogs
 echo "[E2fsprogs] Configuring..."
-LIBS=-L/tools/lib			\
-CFLAGS=-I/tools/include			\
-PKG_CONFIG_PATH=/tools/lib/pkgconfig	\
+LIBS=-L${PTLS}/lib			\
+CFLAGS=-I${PTLS}/include			\
+PKG_CONFIG_PATH=${PTLS}/lib/pkgconfig	\
 ../configure --prefix=/usr		\
              --bindir=/bin		\
              --with-root-prefix=""	\
@@ -659,8 +684,8 @@ PKG_CONFIG_PATH=/tools/lib/pkgconfig	\
 
 echo "[E2fsprogs] Building..."
 make > ${PLOGS}/e2fsprogs_make.1 2>&1
-ln -sf /tools/lib/lib{blk,uu}id.so.1 lib
-#make LD_LIBRARY_PATH=/tools/lib check > ${PLOGS}/e2fsprogs_check.1 2>&1
+ln -sf ${PTLS}/lib/lib{blk,uu}id.so.1 lib
+#make LD_LIBRARY_PATH=${PTLS}/lib check > ${PLOGS}/e2fsprogs_check.1 2>&1
 make install >> ${PLOGS}/e2fsprogs_make.1 2>&1
 make install-libs >> ${PLOGS}/e2fsprogs_make.1 2>&1
 chmod u+w /usr/lib/{libcom_err,libe2p,libext2fs,libss}.a
@@ -669,19 +694,19 @@ install-info --dir-file=/usr/share/info/dir /usr/share/info/libext2fs.info
 makeinfo -o doc/com_err.info ../lib/et/com_err.texinfo
 install -m644 doc/com_err.info /usr/share/info
 install-info --dir-file=/usr/share/info/dir /usr/share/info/com_err.info
-cd ..
+coresrc_clean e2fsprogs
 
 
 # IANA-etc
-cd iana-etc
+coresrc_prep iana-etc
 echo "[IANA-Etc] Building..."
 make > ${PLOGS}/iana-etc_make.1 2>&1
 make install >> ${PLOGS}/iana-etc_make.1 2>&1
-cd ..
+coresrc_clean iana-etc
 
 
 # M4
-cd m4
+coresrc_prep m4
 echo "[M4] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/m4_configure.1 2>&1
 
@@ -692,22 +717,22 @@ set +e
 #make check > ${PLOGS}/m4_check.1 2>&1
 set -e
 make install >> ${PLOGS}/m4_make.1 2>&1
-cd ..
+coresrc_clean m4
 
 
 # Bison
-cd bison
+coresrc_prep bison
 echo "[Bison] Configuring..."
 ./configure --prefix=/usr --docdir=/usr/share/doc/bison > ${PLOGS}/bison_configure.1 2>&1
 
 echo "[Bison] Building..."
 make > ${PLOGS}/bison_make.1 2>&1
 make install >> ${PLOGS}/bison_make.1 2>&1
-cd ..
+coresrc_clean bison
 
 
 # Flex
-cd flex
+coresrc_prep flex
 echo "[Flex] Configuring..."
 ./configure --prefix=/usr --docdir=/usr/share/doc/flex > ${PLOGS}/flex_configuring.1 2>&1
 
@@ -716,11 +741,11 @@ make > ${PLOGS}/flex_make.1 2>&1
 #make check > ${PLOGS}/flex_check.1 2>&1
 make install >> ${PLOGS}/flex_make.1 2>&1
 ln -s /usr/bin/flex /usr/bin/lex
-cd ..
+coresrc_clean flex
 
 
 # Grep
-cd grep
+coresrc_prep grep
 echo "[Grep] Configuring..."
 ./configure --prefix=/usr --bindir=/bin > ${PLOGS}/grep_configure.1 2>&1
 
@@ -728,14 +753,14 @@ echo "[Grep] Building..."
 make > ${PLOGS}/grep_make.1 2>&1
 #make check > ${PLOGS}/grep_check.1 2>&1
 make install >> ${PLOGS}/grep_make.1 2>&1
-cd ..
+coresrc_clean grep
 
 
 # Readline
-cd readline
+coresrc_prep readline
 echo "[Readline] Configuring..."
-sed -i '/MV.*old/d' Makefile.in
-sed -i '/{OLDSUFF}/c:' support/shlib-install
+sed -i -e '/MV.*old/d' Makefile.in
+sed -i -e '/{OLDSUFF}/c:' support/shlib-install
 ./configure --prefix=/usr	\
 	--disable-static	\
 	--docdir=/usr/share/doc/readline > ${PLOGS}/readline_configure.1 2>&1
@@ -746,16 +771,16 @@ mv /usr/lib/lib{readline,history}.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/libreadline.so) /usr/lib/libreadline.so
 ln -sf /lib/$(readlink /usr/lib/libhistory.so ) /usr/lib/libhistory.so
 install -m644 doc/*.{ps,pdf,html,dvi} /usr/share/doc/readline
-cd ..
+coresrc_clean readline
 
 
 # Bash
-cd bash
+coresrc_prep bash
 echo "[Bash] Configuring..."
 ./configure --prefix=/usr			\
 	--docdir=/usr/share/doc/		\
 	--without-bash-malloc			\
-            --with-installed-readline > ${PLOGS}/bash_configure.1 2>&1
+	--with-installed-readline > ${PLOGS}/bash_configure.1 2>&1
 
 echo "[Bash] Building..."
 make > ${PLOGS}/bash_make.1 2>&1
@@ -767,11 +792,11 @@ mv -f /usr/bin/bash /bin
 # Do we need to create a second script and bash -c that with the new bash,
 # or can we continue using this bash?
 #exec /bin/bash --login +h
-cd ..
+coresrc_clean bash
 
 
 # Bc
-cd bc
+coresrc_prep bc
 echo "[BC] Configuring..."
 ./configure --prefix=/usr	\
 	--with-readline		\
@@ -782,11 +807,11 @@ echo "[BC] Building..."
 make > ${PLOGS}/bc_make.1 2>&1
 #echo "quit" | ./bc/bc -l Test/checklib.b > ${PLOGS}/bc_check.1 2>&1
 make install >> ${PLOGS}/bc_make.1 2>&1
-cd ..
+coresrc_clean bc
 
 
 # Libtool
-cd libtool
+coresrc_prep libtool
 echo "[Libtool] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/libtool_configure.1 2>&1
 
@@ -794,11 +819,11 @@ echo "[Libtool] Building..."
 make > ${PLOGS}/libtool_make.1 2>&1
 #make check > ${PLOGS}/libtool_check.1 2>&1
 make install >> ${PLOGS}/libtool_make.1 2>&1
-cd ..
+coresrc_clean libtool
 
 
 # GDBM
-cd gdbm
+coresrc_prep gdbm
 echo "[GDBM] Configuring..."
 ./configure --prefix=/usr	\
 	--disable-static	\
@@ -807,25 +832,24 @@ echo "[GDBM] Configuring..."
 make > ${PLOGS}/gdbm_make.1 2>&1
 #make check > ${PLOGS}/gdbm_check.1 2>&1
 make install >> ${PLOGS}/gdbm_make.1 2>&1
-cd ..
+coresrc_clean gdbm
 
 
 # Expat
-cd expat
+coresrc_prep expat
 echo "[Expat] Configuring..."
 ./configure --prefix=/usr --disable-static > ${PLOGS}/expat_configure.1 2>&1
-
 echo "[Expat] Building..."
 make > ${PLOGS}/expat_make.1 2>&1
 #make check > ${PLOGS}/expat_check.1 2>&1
 make install >> ${PLOGS}/expat_make.1 2>&1
 install -dm755 /usr/share/doc/expat
 install -m644 doc/*.{html,png,css} /usr/share/doc/expat
-cd ..
+coresrc_clean expat
 
 
 # INetUtils
-cd inetutils
+coresrc_prep inetutils
 echo "[InetUtils] Configuring..."
 ./configure --prefix=/usr	\
 	--localstatedir=/var	\
@@ -843,12 +867,12 @@ make > ${PLOGS}/inetutils_make.1 2>&1
 make install >> ${PLOGS}/inetutils_make.1 2>&1
 mv /usr/bin/{hostname,ping,ping6,traceroute} /bin
 mv /usr/bin/ifconfig /sbin
-cd ..
+coresrc_clean inetutils
 
 
 # Perl
-cd perl
-echo "127.0.0.1 localhost $(hostname)" > /etc/hosts
+coresrc_prep perl
+echo "127.0.0.1 localhost localhost.localdomain" > /etc/hosts
 export BUILD_ZLIB=False
 export BUILD_BZIP2=0
 echo "[Perl] Configuring..."
@@ -864,11 +888,11 @@ make > ${PLOGS}/perl_make.1 2>&1
 #make -k test > ${PLOGS}/perl_check.1 2>&1
 make install > ${PLOGS}/perl_make.1 2>&1
 unset BUILD_ZLIB BUILD_BZIP2
-cd ..
+coresrc_clean perl
 
 
 # XML::Parser
-cd XML-Parser
+coresrc_prep XML-Parser
 echo "[PERL: XML::Parser] Configuring..."
 perl Makefile.PL > ${PLOGS}/xml-parser_configure.1 2>&1
 
@@ -876,11 +900,11 @@ echo "[PERL: XML::Parser] Building..."
 make > ${PLOGS}/xml-parser_make.1 2>&1
 #make test > ${PLOGS}/xml-parser_check.1 2>&1
 make install >> ${PLOGS}/xml-parser_make.1 2>&1
-cd ..
+coresrc_clean XML-Parser
 
 
 # Autoconf
-cd autoconf
+coresrc_prep autoconf
 echo "[Autoconf] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/autoconf_configure.1 2>&1
 
@@ -888,11 +912,11 @@ echo "[Autoconf] Building..."
 make > ${PLOGS}/autoconf_make.1 2>&1
 #make check > ${PLOGS}/autoconf_check.1 2>&1
 make install >> ${PLOGS}/autoconf_make.1 2>&1
-cd ..
+coresrc_clean autoconf
 
 
 # Automake
-cd automake
+coresrc_prep automake
 echo "[Automake] Configuring..."
 sed -i 's:/\\\${:/\\\$\\{:' bin/automake.in
 ./configure --prefix=/usr --docdir=/usr/share/doc/automake > ${PLOGS}/automake_configure.1 2>&1
@@ -902,32 +926,32 @@ make > ${PLOGS}/automake_make.1 2>&1
 sed -i "s:./configure:LEXLIB=/usr/lib/libfl.a &:" t/lex-{clean,depend}-cxx.sh
 #make -j4 check > ${PLOGS}/automake_check.1 2>&1
 make install >> ${PLOGS}/automake_make.1 2>&1
-cd ..
+coresrc_clean automake
 
 
 # Coreutils
-cd coreutils
+coresrc_prep coreutils
 echo "[Coreutils] Configuring..."
 FORCE_UNSAFE_CONFIGURE=1 ./configure	\
             --prefix=/usr		\
             --enable-no-install-program=kill,uptime > ${PLOGS}/coreutils_configure.1 2>&1
 
 echo "[Coreutils] Building..."
-FORCE_UNSAFE_CONFIGURE=1 make > ${PLOGS}/coreutils_make.1 2>&1
+FORCE_UNSAFE_CONFIGURE=1 make > ${PLOGS}/coreutils_make.1 2>&1 # FUCK THA PO-LICE
 make install >> ${PLOGS}/coreutils_make.1 2>&1
 mv /usr/bin/{cat,chgrp,chmod,chown,cp,date,dd,df,echo} /bin
 mv /usr/bin/{false,ln,ls,mkdir,mknod,mv,pwd,rm} /bin
 mv /usr/bin/{rmdir,stty,sync,true,uname} /bin
 mv /usr/bin/chroot /usr/sbin
 mv /usr/share/man/man1/chroot.1 /usr/share/man/man8/chroot.8
-sed -i s/\"1\"/\"8\"/1 /usr/share/man/man8/chroot.8
-mv /usr/bin/{head,sleep,nice,test,[} /bin
-cd ..
+sed -i -e 's/\"1\"/\"8\"/1' /usr/share/man/man8/chroot.8
+mv /usr/bin/{head,sleep,nice,test,\[} /bin
+coresrc_clean coreutils
 
 
 # Diffutils
-cd diffutils
-sed -i 's:= @mkdir_p@:= /bin/mkdir -p:' po/Makefile.in
+coresrc_prep diffutils
+sed -i 's:= @mkdir_p@:= /bin/mkdir -p:' po/Makefile.in.in
 echo "[Diffutils] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/diffutils_configure.1 2>&1
 
@@ -935,11 +959,11 @@ echo "[Diffutils] Building..."
 make > ${PLOGS}/diffutils_make.1 2>&1
 #make check > ${PLOGS}/diffutils_check.1 2>&1
 make install >> ${PLOGS}/diffutils_make.1 2>&1
-cd ..
+coresrc_clean diffutils
 
 
 # Gawk
-cd gawk
+coresrc_prep gawk
 echo "[Gawk] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/gawk_configure.1 2>&1
 
@@ -949,18 +973,11 @@ make > ${PLOGS}/gawk_make.1 2>&1
 make install >> ${PLOGS}/gawk_make.1 2>&1
 mkdir /usr/share/doc/gawk
 cp doc/{awkforai.txt,*.{eps,pdf,jpg}} /usr/share/doc/gawk
-cd ..
+coresrc_clean gawk
 
 
 # Findutils
-cd findutils
-echo "[Findutils] Configuring..."
-
-cd ..
-
-
-# Findutils
-cd findutils
+coresrc_prep findutils
 echo "[Findutils] Configuring..."
 ./configure --prefix=/usr --localstatedir=/var/lib/locate > ${PLOGS}/findutils_configure.1 2>&1
 
@@ -970,11 +987,11 @@ make > ${PLOGS}/findutils_make.1 2>&1
 make install >> ${PLOGS}/findutils_make.1 2>&1
 mv /usr/bin/find /bin
 sed -i 's|find:=${BINDIR}|find:=/bin|' /usr/bin/updatedb
-cd ..
+coresrc_clean findutils
 
 
 # Gettext
-cd gettext
+coresrc_prep gettext
 echo "[Gettext] Configuring..."
 ./configure --prefix=/usr	\
 	--disable-static	\
@@ -985,11 +1002,11 @@ make > ${PLOGS}/gettext_make.1 2>&1
 #make check > ${PLOGS}/gettext_check.1 2>&1
 make install >> ${PLOGS}/gettext_make.1 2>&1
 chmod 0755 /usr/lib/preloadable_libintl.so
-cd ..
+coresrc_clean gettext
 
 
 # Intltool
-cd intltool
+coresrc_prep intltool
 echo "[Intltool] Configuring..."
 sed -i 's:\\\${:\\\$\\{:' intltool-update.in
 ./configure --prefix=/usr > ${PLOGS}/intltool_configure.1 2>&1
@@ -999,11 +1016,11 @@ make > ${PLOGS}/intltool_make.1 2>&1
 #make check > ${PLOGS}/intltool_check.1 2>&1
 make install >> ${PLOGS}/intltool_make.1 2>&1
 install -Dm644 doc/I18N-HOWTO /usr/share/doc/intltool/I18N-HOWTO
-cd ..
+coresrc_clean intltool
 
 
 # Gperf
-cd gperf
+coresrc_prep gperf
 echo "[Gperf] Configuring..."
 ./configure --prefix=/usr --docdir=/usr/share/doc/gperf > ${PLOGS}/gperf_configure.1 2>&1
 
@@ -1011,22 +1028,22 @@ echo "[Gperf] Building..."
 make > ${PLOGS}/gperf_make.1 2>&1
 #make -j1 check > ${PLOGS}/gperf_check.1 2>&1
 make install >> ${PLOGS}/gperf_make.1 2>&1
-cd ..
+coresrc_clean gperf
 
 
 # Groff
-cd groff
+coresrc_prep groff
 echo "[Groff] Configuring..."
 PAGE=letter ./configure --prefix=/usr > ${PLOGS}/groff_configure.1 2>&1
 
 echo "[Groff] Building..."
 make > ${PLOGS}/groff_make.1 2>&1
 make install >> ${PLOGS}/groff_make.1 2>&1
-cd ..
+coresrc_clean groff
 
 
 # Xz
-cd xz
+coresrc_prep xz
 echo "[Xz] Configuring..."
 sed -i -e '/mf\.buffer = NULL/a next->coder->mf.size = 0;' src/liblzma/lz/lz_encoder.c
 ./configure --prefix=/usr	\
@@ -1040,11 +1057,11 @@ make install >> ${PLOGS}/xz_make.1 2>&1
 mv /usr/bin/{lzma,unlzma,lzcat,xz,unxz,xzcat} /bin
 mv /usr/lib/liblzma.so.* /lib
 ln -sf /lib/$(readlink /usr/lib/liblzma.so) /usr/lib/liblzma.so
-cd ..
+coresrc_clean xz
 
 
 # Grub
-cd grub
+coresrc_prep grub
 echo "[Grub] Configuring..."
 ./configure --prefix=/usr	\
 	--sbindir=/sbin		\
@@ -1056,22 +1073,22 @@ echo "[Grub] Configuring..."
 echo "[Grub] Building..."
 make > ${PLOGS}/grub_make.1 2>&1
 make install >> ${PLOGS}/grub_make.1 2>&1
-cd ..
+coresrc_clean
 
 
 # Less
-cd less
+coresrc_prep less
 echo "[Less] Configuring..."
 ./configure --prefix=/usr --sysconfdir=/etc > ${PLOGS}/less_configure.1 2>&1
 
 echo "[Less] Building..."
 make > ${PLOGS}/less_make.1 2>&1
 make install >> ${PLOGS}/less_make.1 2>&1
-cd ..
+coresrc_clean less
 
 
 # Gzip
-cd gzip
+coresrc_prep gzip
 echo "[Gzip] Configuring..."
 ./configure --prefix=/usr --bindir=/bin > ${PLOGS}/gzip_configure.1 2>&1
 
@@ -1081,26 +1098,26 @@ make > ${PLOGS}/gzip_make.1 2>&1
 make install >> ${PLOGS}/gzip_make.1 2>&1
 mv /bin/{gzexe,uncompress,zcmp,zdiff,zegrep} /usr/bin
 mv /bin/{zfgrep,zforce,zgrep,zless,zmore,znew} /usr/bin
-cd ..
+coresrc_clean gzip
 
 
 # IPRoute2
-cd iproute2
+coresrc_prep iproute2
 echo "[IPRoute2] Building..."
-sed -i /ARPD/d Makefile
-sed -i 's/arpd.8//' man/man8/Makefile
+sed -i -e '/ARPD/d' Makefile
+sed -i -e 's/arpd.8//' man/man8/Makefile
 rm doc/arpd.sgml
 make > ${PLOGS}/iproute2_make.1 2>&1
 make DOCDIR=/usr/share/doc/iproute2 install >> ${PLOGS}/iproute2_make.1 2>&1
-cd ..
+coresrc_clean iproute2
 
 
 # Kbd
-cd kbd
+coresrc_prep kbd
 echo "[Kbd] Configuring..."
-sed -i 's/\(RESIZECONS_PROGS=\)yes/\1no/g' configure
-sed -i 's/resizecons.8 //' docs/man/man8/Makefile.in
-PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr --disable-vlock > ${PLOGS}/kbd_configure.1 2>&1
+sed -i -e 's/\(RESIZECONS_PROGS=\)yes/\1no/g' configure
+sed -i -e 's/resizecons.8 //' docs/man/man8/Makefile.in
+PKG_CONFIG_PATH=${PTLS}/lib/pkgconfig ./configure --prefix=/usr --disable-vlock > ${PLOGS}/kbd_configure.1 2>&1
 
 echo "[Kbd] Building..."
 make > ${PLOGS}/kbd_make.1 2>&1
@@ -1108,11 +1125,11 @@ make > ${PLOGS}/kbd_make.1 2>&1
 make install >> ${PLOGS}/kbd_make.1 2>&1
 mkdir /usr/share/doc/kbd
 cp -R docs/doc/* /usr/share/doc/kbd
-cd ..
+coresrc_clean kbd
 
 
 # Kmod
-cd kmod
+coresrc_prep kmod
 echo "[Kmod] Configuring..."
 ./configure --prefix=/usr	\
 	--bindir=/bin		\
@@ -1129,23 +1146,23 @@ do
   ln -s /bin/kmod /sbin/${target}
 done
 ln -s kmod /bin/lsmod
-cd ..
+coresrc_clearn kmod
 
 
 # Libpipeline
-cd libpipeline
+coresrc_prep libpipeline
 echo "[LibPipeline] Configuring..."
-PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr > ${PLOGS}/libpipeline_configure.1 2>&1
+PKG_CONFIG_PATH=${PTLS}/lib/pkgconfig ./configure --prefix=/usr > ${PLOGS}/libpipeline_configure.1 2>&1
 
 echo "[LibPipeline] Building..."
 make > ${PLOGS}/libpipeline_make.1 2>&1
 #make check > ${PLOGS}/libpipeline_check.1 2>&1
 make install >> ${PLOGS}/libpipeline_make.1 2>&1
-cd ..
+coresrc_clean libpipeline
 
 
 # Make
-cd make
+coresrc_prep make
 echo "[Make] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/make_configure.1 2>&1
 
@@ -1153,11 +1170,11 @@ echo "[Make] Building..."
 make > ${PLOGS}/make_make.1 2>&1
 #make check > ${PLOGS}/make_check.1 2>&1
 make install >> ${PLOGS}/make_make.1 2>&1
-cd ..
+coresrc_clean make
 
 
 # Patch
-cd patch
+coresrc_prep patch
 echo "[Patch] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/patch_configure.1 2>&1
 
@@ -1165,13 +1182,13 @@ echo "[Patch] Building..."
 make > ${PLOGS}/patch_make.1 2>&1
 #make check > ${PLOGS}/patch_check.1 2>&1
 make install >> ${PLOGS}/patch_make.1 2>&1
-cd ..
+coresrc_clean patch
 
 
 # Sysklogd
-cd sysklogd
+coresrc_prep sysklogd
 echo "[Sysklogd] Building..."
-sed -i '/Error loading kernel symbols/{n;n;d}' ksym_mod.c
+sed -i -e '/Error loading kernel symbols/{n;n;d}' ksym_mod.c
 make > ${PLOGS}/sysklogd_make.1 2>&1
 make BINDIR=/sbin install >> ${PLOGS}/sysklogd_make.1 2>&1
 cat > /etc/syslog.conf << "EOF"
@@ -1187,14 +1204,14 @@ user.* -/var/log/user.log
 
 # End /etc/syslog.conf
 EOF
-cd ..
+coresrc_clean sysklogd
 
 
 # SysVInit skipped because using RC...?
 
 
 # Tar
-cd tar
+coresrc_prep tar
 echo "[Tar] Configuring..."
 FORCE_UNSAFE_CONFIGURE=1	\
 ./configure --prefix=/usr	\
@@ -1207,11 +1224,11 @@ make install >> ${PLOGS}/tar_make.1 2>&1
 set +e
 make -C doc install-html docdir=/usr/share/doc/tar >> ${PLOGS}/tar_make.1 2>&1
 set -e
-cd ..
+coresrc_clean tar
 
 
 # Texinfo
-cd texinfo
+coresrc_prep texinfo
 echo "[Texinfo] Configuring..."
 ./configure --prefix=/usr --disable-static > ${PLOGS}/texinfo_configure.1 2>&1
 
@@ -1220,17 +1237,17 @@ make > ${PLOGS}/texinfo_make.1 2>&1
 #make check > ${PLOGS}/texinfo_check.1 2>&1
 make install >> ${PLOGS}/texinfo_make.1 2>&1
 make TEXMF=/usr/share/texmf install-tex >> ${PLOGS}/texinfo_make.1 2>&1
-cd ..
+coresrc_clean texinfo
 
 
 # Eudev
-cd eudev
+coresrc_prep eudev
 echo "[Eudev] Configuring..."
-sed -r -i 's|/usr(/bin/test)|\1|' test/udev-test.pl
+sed -i -re 's|/usr(/bin/test)|\1|' test/udev-test.pl
 cat > config.cache << "EOF"
 HAVE_BLKID=1
 BLKID_LIBS="-lblkid"
-BLKID_CFLAGS="-I/tools/include"
+BLKID_CFLAGS="-I${PTLS}/include"
 EOF
 ./configure --prefix=/usr	\
 	--bindir=/sbin		\
@@ -1245,19 +1262,19 @@ EOF
 	--config-cache > ${PLOGS}/eudev_configure.1 2>&1
 
 echo "[Eudev] Building..."
-LIBRARY_PATH=/tools/lib make > ${PLOGS}/eudev_make.1 2>&1
+LIBRARY_PATH=${PTLS}/lib make > ${PLOGS}/eudev_make.1 2>&1
 mkdir -p /lib/udev/rules.d
 mkdir -p /etc/udev/rules.d
-make LD_LIBRARY_PATH=/tools/lib check > ${PLOGS}/eudev_check.1 2>&1
-make LD_LIBRARY_PATH=/tools/lib install >> ${PLOGS}/eudev_make.1 2>&1
+make LD_LIBRARY_PATH=${PTLS}/lib check > ${PLOGS}/eudev_check.1 2>&1
+make LD_LIBRARY_PATH=${PTLS}/lib install >> ${PLOGS}/eudev_make.1 2>&1
 cp -a ../udev-lfs .
 make -f udev-lfs/Makefile.lfs install >> ${PLOGS}/eudev_make.1 2>&1
-LD_LIBRARY_PATH=/tools/lib udevadm hwdb --update >> ${PLOGS}/eudev_configure.1 2>&1
-cd ..
+LD_LIBRARY_PATH=${PTLS}/lib udevadm hwdb --update >> ${PLOGS}/eudev_configure.1 2>&1
+coresrc_clean eudev
 
 
 # Util-Linux
-cd util-linux
+coresrc_prep util-linux
 echo "[Util-Linux] Configuring..."
 mkdir -p /var/lib/hwclock
 ./configure ADJTIME_PATH=/var/lib/hwclock/adjtime	\
@@ -1277,11 +1294,11 @@ mkdir -p /var/lib/hwclock
 echo "[Util-Linux] Building..."
 make > ${PLOGS}/util-linux_make.1 2>&1
 make install >> ${PLOGS}/util-linux_make.1 2>&1
-cd ..
+coresrc_clearn util-linux
 
 
 # Man-DB
-cd man-db
+coresrc_prep man-db
 echo "[Man-DB] Configuring..."
 ./configure --prefix=/usr			\
 	--docdir=/usr/share/doc/man-db		\
@@ -1295,11 +1312,11 @@ echo "[Man-DB] Building..."
 make > ${PLOGS}/man-db_make.1 2>&1
 #make check > ${PLOGS}/man-db_check.1 2>&1
 make install >> ${PLOGS}/man-db_make.1 2>&1
-cd ..
+coresrc_clean man-db
 
 
 # Vim
-cd vim
+coresrc_prep vim
 echo '#define SYS_VIMRC_FILE "/etc/vimrc"' >> src/feature.h
 echo "[Vim] Configuring..."
 ./configure --prefix=/usr > ${PLOGS}/vim_configure.1 2>&1
@@ -1326,4 +1343,4 @@ endif
 
 " End /etc/vimrc
 EOF
-
+coresrc_clean vim

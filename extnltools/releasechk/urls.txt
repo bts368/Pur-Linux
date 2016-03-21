@@ -61,6 +61,7 @@ http://ftp.gnu.org/gnu/sed/sed-4.2.2.tar.gz
 http://ftp.gnu.org/gnu/tar/tar-1.28.tar.xz
 http://iweb.dl.sourceforge.net/project/tcl/Tcl/8.6.5/tcl8.6.5-src.tar.gz
 http://ftp.gnu.org/gnu/texinfo/texinfo-6.1.tar.gz
+http://dev.gentoo.org/~blueness/eudev/eudev-3.1.5.tar.gz
 https://www.kernel.org/pub/linux/utils/util-linux/v2.27/util-linux-2.27.1.tar.gz
 http://tukaani.org/xz/xz-5.2.2.tar.gz
 http://download.savannah.gnu.org/releases/man-db/man-db-2.7.5.tar.xz
@@ -68,6 +69,5 @@ http://www.iana.org/time-zones/repository/releases/tzdata2016a.tar.gz
 http://www.zlib.net/zlib-1.2.8.tar.xz
 # contrib #
 https://gitlab.com/NTPsec/ntpsec/repository/archive.tar.bz2?ref=master
-http://dev.gentoo.org/~blueness/eudev/eudev-3.1.5.tar.gz
 http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.3.2.tar.gz
 http://iweb.dl.sourceforge.net/project/net-tools/net-tools-1.60.tar.bz2

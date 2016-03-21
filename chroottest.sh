@@ -1,4 +1,9 @@
 #!/bin/bash
+env -i HOME=${HOME} TERM=${TERM} PS1='\u:\w\$ ' > /dev/null 2>&1
+set +h
+umask 022 
+echo
+
 set -e
 set -x
 

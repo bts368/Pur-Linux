@@ -56,25 +56,29 @@ EOT
 
 purlogo
 
+
+# Only supported on Arch.
+
 #Deps list:
-# GCC
-# G++
-# GNU Make
-# libgmp-dev, libmpfr-dev and libmpc-dev
-# gawk
-# sed
-# grep/egrep
-# GNU 'bison' 2.7 or later
-# patch
-# libencode-perl
-# wget or curl
+#_______________________________________
+# gawk		|			|
+# sed		|-- included in the	|
+# grep		|   "base" group	|
+#_______________|			|
+# gcc					|-- included in the
+# make					|   "base-devel" group
+# bison					|
+# patch					|
+#_______________________________________|	
+# gmp		|
+# mpfr		|
+# libmpc	|-- must be explicitly
+# wget/curl	|   installed
+#_______________|
 
-#Uncomment the following Line for Debian 8
-# apt-get install gcc g++ make libgmp-dev libmpfr-dev libmpc-dev gawk bison patch sudo texinfo file flex xz-utils
 
-#Important: Key Verification of packages is being implemented in an automated method,
-# where this script will fail and print to your screen if a key fails. It requires GPG to be installed
-# and may not be implemented for every package yet.
+#Important: Key Verification of packages is being implemented in an automated method
+# where this script will fail and print to your screen if a key fails. It will require GPG to be installed.
 
 # Build tests are commented out in some places due to some machines just plain being too fast/new.
 
@@ -95,7 +99,6 @@ then
         echo "/!\ /!\ /!\ WARNING WARNING WARNING /!\ /!\ /!\ /!\ "
         exit 1
 fi
-
 echo
 
 # Are we using curl or wget?
@@ -107,20 +110,23 @@ else
 fi
 
 
-# Setting up ENV
-echo "Setting up the environment and cleaning results from previous runs if necessary..."
-env -i HOME=${HOME} TERM=${TERM} PS1='\u:\w\$ ' > /dev/null 2>&1
-set +h
-umask 022
-
-echo
-
 # Scrub/create paths
 mkdir -p ${HOME}/purroot
 PUR=${HOME}/purroot
 PLOGS=${PUR}/logs
 rm -rf ${PLOGS}
 mkdir -p ${PLOGS}
+
+# Setting up ENV
+# WELL, if this isn't the most hacky thing in the world. see the chroot section.
+PATH_LOC=${PATH}
+env_vars=$(env | sed -re "s/=(.*)/='\1'/g")
+env > ${PLOGS}/env_vars.pre_clear
+echo "Setting up the environment and cleaning results from previous runs if necessary..."
+env -i HOME=${HOME} TERM=${TERM} PS1='\u:\w\$ ' > /dev/null 2>&1
+set +h
+umask 022
+echo
 
 # clean up from previous failed runs
 if [ -z "${PUR}" ];
@@ -232,6 +238,11 @@ export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ TLCVER
 
 coresrc_prep () {
 	pkg=${1}
+	if [ -z "${pkg}" ];
+	then
+		echo "WARNING: coresrc_prep called with no packagename!"
+		exit 1
+	fi
 	rm -rf ${PSRC}/${pkg}
 	cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
 	cd ${PSRC}/${pkg}
@@ -239,10 +250,26 @@ coresrc_prep () {
 
 coresrc_prep2 () {
 	pkg=${1}
+	if [ -z "${pkg}" ];
+	then
+		echo "WARNING: coresrc_prep2 called with no packagename!"
+		exit 1
+	fi
 	rm -rf ${PSRC}/${pkg}
 	cp -a ${PSRC}/pur_src/core/${pkg} ${PSRC}
 	mkdir ${PSRC}/${pkg}/${pkg}-build
 	cd ${PSRC}/${pkg}/${pkg}-build
+}
+
+coresrc_clean () {
+	pkg=${1}
+	if [ -z "${pkg}" ];
+	then
+		echo "WARNING: coresrc_clean called with no packagename!"
+		exit 1
+	fi
+	cd ${PSRC}
+	rm -rf ${PSRC}/${pkg}
 }
 
 echo
@@ -255,24 +282,22 @@ echo
 
 #binutils first build
 echo "Binutils - first pass."
-mkdir -p ${PTLS}/lib
-case $(uname -m) in
-  x86_64) ln -s /tools/lib /tools/lib64 ;;
-esac
 coresrc_prep2 binutils
 echo "[Binutils] Configuring..."
-../configure --prefix=/tools	\
-    --with-sysroot=${PUR}	\
-    --with-lib-path=/tools/lib	\
-    --target=${PUR_TGT}		\
-    --disable-nls		\
-    --disable-werror > ${PLOGS}/binutils_configure.1 2>&1
+../configure --prefix=${PTLS}		\
+	--with-sysroot=${PUR}		\
+	--with-lib-path=${PTLS}/lib	\
+	--target=${PUR_TGT}		\
+	--disable-nls			\
+	--disable-werror > ${PLOGS}/binutils_configure.1 2>&1
 
 echo "[Binutils] Building..."
 make > ${PLOGS}/binutils_make.1 2>&1
+case $(uname -m) in
+  x86_64) ln -s ${PTLS}/lib ${PTLS}/lib64 ;;
+esac
 make install >> ${PLOGS}/binutils_make.1 2>&1
-cd ${PSRC}
-rm -rf binutils-build
+coresrc_clean binutils
 
 ## building GCC first run.
 echo "GCC - first pass."
@@ -284,15 +309,16 @@ coresrc_prep2 gcc
 for i in mpfr mpc gmp;
 do
 	coresrc_prep ${i}
-	cp -a ${PSRC}/${pkg} ${PSRC}/gcc/.
+	cp -a ${PSRC}/${i} ${PSRC}/gcc/.
 done
 cd ${PSRC}/gcc
 
-#GCC TIME BABY OH YEAH
+#GCC
 echo "[GCC] Configuring..."
 for file in $(find gcc/config -name linux64.h -o -name linux.h -o -name sysv4.h);
 do
   cp -u ${file}{,.orig}
+  sed -re "s@/lib(64)?(32)?/ld@${PTLS}&@g" -e "s@/usr@${PTLS}@g" ${file}.orig > ${file}
   echo "
 #undef STANDARD_STARTFILE_PREFIX_1
 #undef STANDARD_STARTFILE_PREFIX_2
@@ -303,13 +329,13 @@ done
 cd ${PSRC}/gcc/gcc-build
 ../configure						\
     --target=${PUR_TGT}					\
-    --prefix=/tools					\
+    --prefix=${PTLS}					\
     --with-glibc-version=${HOSTGLIBCVERS}		\
     --with-sysroot=${PUR}				\
     --with-newlib					\
     --without-headers					\
-    --with-local-prefix=/tools				\
-    --with-native-system-header-dir=/tools/include	\
+    --with-local-prefix=${PTLS}				\
+    --with-native-system-header-dir=${PTLS}/include	\
     --disable-nls					\
     --disable-shared					\
     --disable-multilib					\
@@ -326,7 +352,11 @@ cd ${PSRC}/gcc/gcc-build
 echo "[GCC] Building..."
 make > ${PLOGS}/gcc_make.1 2>&1
 make install >> ${PLOGS}/gcc_make.1 2>&1
-cd ${PSRC}
+coresrc_clean gcc
+for i in mpfr mpc gmp;
+do
+	coresrc_clean ${i}
+done
 
 ## Grabbing latest kernel headers
 echo "[Kernel] Making and installing headers..."
@@ -334,21 +364,20 @@ coresrc_prep linux
 make mrproper > ${PLOGS}/kernel-headers_make.1 2>&1
 make INSTALL_HDR_PATH=dest headers_install >> ${PLOGS}/kernel-headers_make.1 2>&1
 cp -r dest/include/* ${PTLS}/include
-cd ${PSRC}
-rm -rf linux-build
+coresrc_clean linux
 
 # Building glibc - first pass
 echo "GlibC - first pass."
 coresrc_prep2 glibc
 echo "[GlibC] Configuring..."
 ../configure						\
-      --prefix=/tools					\
+      --prefix=${PTLS}					\
       --host=${PUR_TGT}					\
       --build=$(../scripts/config.guess)		\
       --disable-profile					\
       --enable-kernel=2.6.32				\
       --enable-obsolete-rpc				\
-      --with-headers=/tools/include			\
+      --with-headers=${PTLS}/include			\
       libc_cv_forced_unwind=yes				\
       libc_cv_ctors_header=yes				\
       libc_cv_c_cleanup=yes > ${PLOGS}/glibc_configure.1 2>&1
@@ -365,7 +394,7 @@ make install >> ${PLOGS}/glibc_make.1 2>&1
 echo -n "Runnning tests before continuing... "
 echo 'int main(){}' > dummy.c
 ${PUR_TGT}-gcc dummy.c
-if readelf -l a.out | grep ': /tools' | grep -q ld-linux-x86-64.so.2;
+if readelf -l a.out | grep ": ${PTLS}" | grep -q ld-linux-x86-64.so.2;
 then
 	echo "Test passed."
 	rm dummy.c a.out
@@ -373,8 +402,7 @@ else
 	echo "Test Failed. Now Exiting, post glibc build."
 	exit 1
 fi
-cd ${PSRC}
-rm -rf glibc/glibc-build
+coresrc_clean glibc
 
 #libstc++
 echo "LibstdC++ - first pass."
@@ -392,8 +420,7 @@ echo "[LibstdC++] Configuring..."
 echo "[LibstdC++] Building..."
 make > ${PLOGS}/libstdc++_make.1 2>&1
 make install >> ${PLOGS}/libstdc++_make.1 2>&1
-cd ${PSRC}
-rm -rf gcc/gcc-build
+coresrc_clean gcc
 
 
 ##############################
@@ -407,7 +434,7 @@ echo "[Binutils] Configuring..."
 CC=${PUR_TGT}-gcc		\
 AR=${PUR_TGT}-ar		\
 RANLIB=${PUR_TGT}-ranlib	\
-./configure			\
+../configure			\
     --prefix=${PTLS}		\
     --disable-nls		\
     --disable-werror		\
@@ -421,21 +448,18 @@ make install >> ${PLOGS}/binutils_make.2 2>&1
 make -C ld clean > ${PLOGS}/binutils_post-tweaks.2 2>&1
 make -C ld LIB_PATH=/usr/lib:/lib >> ${PLOGS}/binutils_post-tweaks.2 2>&1
 cp ld/ld-new ${PTLS}/bin
-cd ${PSRC}
-rm -rf binutils-build
+coresrc_clean binutils
 
 # GCC round 2
 echo "GCC - second pass."
 coresrc_prep2 gcc
-cd ${PTLS}/lib
-cat gcc/${PUR_TGT}/${GCCVER}/plugin/include/limitx.h	\
- gcc/${PUR_TGT}/${GCCVER}/plugin/include/glimits.h	\
- gcc/${PUR_TGT}/${GCCVER}/plugin/include/limity.h > $(dirname $(${PUR_TGT}-gcc -print-libgcc-file-name))/include-fixed/limits.h
-for file in $(find gcc/${PUR_TGT}/${GCCVER}/plugin/include/config -name linux64.h -o -name linux.h -o -name sysv4.h);
+#cd ${PTLS}/lib # why is this here?
+cd ${PSRC}/gcc
+cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PUR_TGT}-gcc -print-libgcc-file-name))/include-fixed/limits.h
+for file in $(find gcc/config -name linux64.h -o -name linux.h -o -name sysv4.h);
 do
   cp -u ${file}{,.orig}
-  sed -re 's@/lib(64)?(32)?/ld@/tools&@g' \
-      -e 's@/usr@/tools@g' ${file}.orig > ${file}
+  sed -re "s@/lib(64)?(32)?/ld@${PTLS}&@g" -e "s@/usr@${PTLS}@g" ${file}.orig > ${file}
   echo "
 #undef STANDARD_STARTFILE_PREFIX_1
 #undef STANDARD_STARTFILE_PREFIX_2
@@ -446,17 +470,8 @@ done
 for i in mpfr mpc gmp;
 do
 	coresrc_prep ${i}
+	cp -a ${PSRC}/${i} ${PSRC}/gcc/.
 done
-cd ${PSRC}/gcc
-
-echo "[GCC] MPFR"
-cp -a ../mpfr .
-
-echo "[GCC] MPC"
-cp -a ../mpc .
-
-echo "[GCC] GMP"
-cp -a ../gmp .
 
 cd ${PSRC}/gcc/gcc-build
 find ./ -name 'config.cache' -exec rm -rf '{}' \;
@@ -478,13 +493,13 @@ RANLIB=${PUR_TGT}-ranlib				\
 echo "[GCC] Building..."
 make > ${PLOGS}/gcc_make.2 2>&1
 make install >> ${PLOGS}/gcc_make.2 2>&1
-ln -s gcc /tools/bin/cc
+ln -s gcc ${PTLS}/bin/cc
 
 #testing again
 echo -n "Runnning tests before continuing... "
 echo 'int main(){}' > dummy.c
 ${PUR_TGT}-gcc dummy.c
-if readelf -l a.out | grep ': /tools' | grep -q ld-linux;
+if readelf -l a.out | grep ": ${PTLS}" | grep -q ld-linux;
 then
 	echo "Test passed."
 	rm dummy.c a.out
@@ -493,8 +508,11 @@ else
         rm dummy.c a.out
         exit 1
 fi
-cd ${PSRC}
-rm -rf gcc/gcc-build
+coresrc_clean gcc
+for i in mpfr mpc gmp;
+do
+	coresrc_clean ${i}
+done
 
 ## Tests
 echo "Running further tests..."
@@ -509,9 +527,8 @@ TZ=UTC make test >> ${PLOGS}/tcl_test.1 2>&1
 make install >> ${PLOGS}/tcl_test.1 2>&1
 chmod u+w ${PTLS}/lib/libtcl${TCLVER}.so
 make install-private-headers >> ${PLOGS}/tcl_test.1 2>&1
-ln -s tclsh${TCLVER} /tools/bin/tclsh
-cd ${PSRC}
-rm -rf tcl-build
+ln -s tclsh${TCLVER} ${PTLS}/bin/tclsh
+coresrc_clean tcl
 
 #Expect
 coresrc_prep expect
@@ -525,8 +542,7 @@ echo "[Expect] Building..."
 make > ${PLOGS}/expect_make.1 2>&1
 make tests >> ${PLOGS}/expect_make.1 2>&1
 make SCRIPTS="" install >> ${PLOGS}/expect_make.1 2>&1
-cd ${PSRC}
-rm -rf expect-build
+coresrc_clean expect
 
 #DejaGNU
 coresrc_prep dejagnu
@@ -536,22 +552,20 @@ echo "[DejaGNU] Configuring..."
 echo "[DejaGNU] Building..."
 make install > ${PLOGS}/dejagnu_make.1 2>&1
 #make check >> ${PLOGS}/dejagnu_make.1 2>&1
-cd ${PSRC}
-rm -rf dejagnu-build
+coresrc_clean dejagnu
 
 #check
 coresrc_prep check
 echo "[Check] Configuring..."
 # this is necessary since we download from git rather than sourceforge. fuck sourceforge.
-autoreconf --install
-PKG_CONFIG= ./configure --prefix=${PTLS} > ${PLOGS}/check_configure.1 2>&1
+autoreconf --install > ${PLOGS}/check_configure.1 2>&1
+PKG_CONFIG= ./configure --prefix=${PTLS} >> ${PLOGS}/check_configure.1 2>&1
 
 echo "[Check] Building..."
 make > ${PLOGS}/check_make.1 2>&1
 #make check >> ${PLOGS}/check_make.1 2>&1
 make install >> ${PLOGS}/check_make.1 2>&1
-cd ${PSRC}
-rm -rf check-build
+coresrc_clean check
 
 #ncurses
 coresrc_prep ncurses
@@ -567,8 +581,7 @@ sed -i -e 's/mawk//' configure
 echo "[nCurses] Building..."
 make > ${PLOGS}/ncurses_make.1 2>&1
 make install >> ${PLOGS}/ncurses_make.1 2>&1
-cd ${PSRC}
-rm -rf ncurses-build
+coresrc_clean ncurses
 
 #bash
 coresrc_prep bash
@@ -580,16 +593,14 @@ make > ${PLOGS}/bash_make.1 2>&1
 # make tests >> ${PLOGS}/bash_make.1 2>&1
 make install >> ${PLOGS}/bash_make.1 2>&1
 ln -s bash ${PTLS}/bin/sh
-cd ${PSRC}
-rm -rf bash-build
+coresrc_clean bash
 
 #Bzip2
 coresrc_prep bzip2
 echo "[Bzip2] Building..."
 make > ${PLOGS}/bzip2_make.1 2>&1
 make PREFIX=${PTLS} install >> ${PLOGS}/bzip2_make.1 2>&1
-cd ${PSRC}
-rm -rf bzip2-build
+coresrc_clean bzip2
 
 #Coreutils
 coresrc_prep coreutils
@@ -600,8 +611,7 @@ echo "[Coreutils] Building..."
 make > ${PLOGS}/coreutils_make.1 2>&1
 # make RUN_EXPENSIVE_TESTS=yes check >> ${PLOGS}/coreutils_make.1 2>&1
 make install >> ${PLOGS}/coreutils_make.1 2>&1
-cd ${PSRC}
-rm -rf coreutils-build
+coresrc_clean coreutils
 
 #Diffutils
 coresrc_prep diffutils
@@ -612,8 +622,7 @@ echo "[Diffutils] Building..."
 make > ${PLOGS}/diffutils_make.1 2>&1
 # make check >> ${PLOGS}/diffutils_make.1 2>&1
 make install >> ${PLOGS}/diffutils_make.1 2>&1
-cd ${PSRC}
-rm -rf diffutils-build
+coresrc_clean diffutils
 
 # File
 coresrc_prep file
@@ -624,8 +633,7 @@ echo "[File] Building..."
 make > ${PLOGS}/file_make.1 2>&1
 #make check >> ${PLOGS}/file_make.1 2>&1
 make install >> ${PLOGS}/file_make.1 2>&1
-cd ${PSRC}
-rm -rf file-build
+coresrc_clean file
 
 # Findutils
 coresrc_prep findutils
@@ -636,8 +644,7 @@ echo "[Findutils] Building..."
 make > ${PLOGS}/findutils_make.1 2>&1
 #make check >> ${PLOGS}/findutils_makee.1 2>&1
 make install >> ${PLOGS}/findutils_makee.1 2>&1
-cd ${PSRC}
-rm -rf findutils-build
+coresrc_clean findutils
 
 # GAWK
 coresrc_prep gawk
@@ -648,11 +655,11 @@ echo "[Gawk] Building..."
 make > ${PLOGS}/gawk_make.1 2>&1
 #make check >> ${PLOGS}/gawk_make.1 2>&1
 make install >> ${PLOGS}/gawk_make.1 2>&1
-cd ${PSRC}
-rm -rf gawk-build
+coresrc_clean gawk
 
 #gettext
 coresrc_prep gettext
+cd gettext-tools
 echo "[Gettext] Configuring..."
 EMACS="no" ./configure --prefix=${PTLS} --disable-shared > ${PLOGS}/gettext_configure.1 2>&1
 
@@ -663,8 +670,7 @@ make -C src msgfmt >> ${PLOGS}/gettext_make.1 2>&1
 make -C src msgmerge >> ${PLOGS}/gettext_make.1 2>&1
 make -C src xgettext >> ${PLOGS}/gettext_make.1 2>&1
 cp src/{msgfmt,msgmerge,xgettext} ${PTLS}/bin
-cd ${PSRC}
-rm -rf gettext-build
+coresrc_clean gettext
 
 # GNU Grep
 coresrc_prep grep
@@ -675,8 +681,7 @@ echo "[Grep] Building..."
 make > ${PLOGS}/grep_make.1 2>&1
 #make check >> ${PLOGS}/grep_make.1 2>&1
 make install >> ${PLOGS}/grep_make.1 2>&1
-cd ${PSRC}
-rm -rf grep-build
+coresrc_clean grep
 
 # GNU GZip
 coresrc_prep gzip
@@ -687,8 +692,7 @@ echo "[Gzip] Building..."
 make > ${PLOGS}/gzip_make.1 2>&1
 #make check >> ${PLOGS}/gzip_make.1 2>&1
 make install >> ${PLOGS}/gzip_make.1 2>&1
-cd ${PSRC}
-rm -rf gzip-build
+coresrc_clean gzip
 
 # M4
 coresrc_prep m4
@@ -699,8 +703,7 @@ echo "[M4] Building..."
 make > ${PLOGS}/m4_make.1 2>&1
 #make check >> ${PLOGS}/m4_make.1 2>&1
 make install >> ${PLOGS}/m4_make.1 2>&1
-cd ${PSRC}
-rm -rf m4-build
+coresrc_clean m4
 
 # GNU Make
 coresrc_prep make
@@ -711,8 +714,7 @@ echo "[Make] Building..."
 make > ${PLOGS}/make_make.1 2>&1
 #make check >> ${PLOGS}/make_make.1 2>&1
 make install >> ${PLOGS}/make_make.1 2>&1
-cd ${PSRC}
-rm -rf make-build
+coresrc_clean make
 
 #GNU Patch
 coresrc_prep patch
@@ -723,8 +725,7 @@ echo "[Patch] Building..."
 make > ${PLOGS}/patch_make.1 2>&1
 #make check >> ${PLOGS}/patch_make.1 2>&1
 make install >> ${PLOGS}/patch_make.1 2>&1
-cd ${PSRC}
-rm -rf patch-build
+coresrc_clean patch
 
 # Perl (Will be removed from Base eventually/hopefully)
 coresrc_prep perl
@@ -736,8 +737,7 @@ make > ${PLOGS}/perl_make.1 2>&1
 cp perl cpan/podlators/pod2man ${PTLS}/bin
 mkdir -p ${PTLS}/lib/perl${PERLMAJ}/${PERLVER}
 cp -R lib/* ${PTLS}/lib/perl${PERLMAJ}/${PERLVER}
-cd ${PSRC}
-rm -rf perl-build
+coresrc_clean perl
 
 #GNU Sed
 coresrc_prep sed
@@ -748,8 +748,7 @@ echo "[Sed] Building..."
 make > ${PLOGS}/sed_make.1 2>&1
 #make check >> ${PLOGS}/sed_make.1 2>&1
 make install >> ${PLOGS}/sed_make.1 2>&1
-cd ${PSRC}
-rm -rf sed-build
+coresrc_clean sed
 
 #GNU Tar
 coresrc_prep tar
@@ -760,8 +759,7 @@ echo "[Tar] Building..."
 make > ${PLOGS}/tar_make.1 2>&1
 #make check >> ${PLOGS}/tar_make.1 2>&1
 make install >> ${PLOGS}/tar_make.1 2>&1
-cd ${PSRC}
-rm -rf tar-build
+coresrc_clean tar
 
 #GNU Texinfo
 coresrc_prep texinfo
@@ -772,8 +770,7 @@ echo "[Texinfo] Building..."
 make > ${PLOGS}/texinfo_make.1 2>&1
 #make check >> ${PLOGS}/texinfo_make.1 2>&1
 make install >> ${PLOGS}/texinfo_make.1 2>&1
-cd ${PSRC}
-rm -rf texinfo-build
+coresrc_clean texinfo
 
 # Util-Linux
 coresrc_prep util-linux
@@ -785,10 +782,14 @@ echo "[Util-Linux] Configuring..."
             PKG_CONFIG="" > ${PLOGS}/util-linux_configure.1 2>&1
 
 echo "[Util-Linux] Building..."
+# i've had issues with this failing- not finding zlib.h, libudev.h, etc.
+#MAKEFLAGS_DFLT=${MAKEFLAGS}
+#MAKEFLAGS=''
+#make -j1 > ${PLOGS}/util-linux_make.1 2>&1
 make > ${PLOGS}/util-linux_make.1 2>&1
 make install >> ${PLOGS}/util-linux_make.1 2>&1
-cd ${PSRC}
-rm -rf util-linux-build
+coresrc_clean util-linux
+#MAKEFLAGS=${MAKEFLAGS_DFLT}
 
 #Xz
 coresrc_prep xz
@@ -799,8 +800,9 @@ echo "[Xz] Building..."
 make > ${PLOGS}/xz_make.1 2>&1
 #make check >> ${PLOGS}/xz_make.1 2>&1
 make install >> ${PLOGS}/xz_make.1 2>&1
-cd ${PSRC}
-rm -rf xz-build
+coresrc_clean xz
+
+PATH=${PATH_LOC}
 
 # Stripping bootstrap env
 # strip throws a non-0 because some /usr/bin's are actually bash scripts, etc.
@@ -811,12 +813,22 @@ set -e
 rm -rf ${PTLS}/{,share}/{info,man,doc}
 
 # CHOWNing Bootstrap
-sudo chown -R root:root ${PUR}/tools
+sudo chown -R root:root ${PTLS}
 
 
 ############################################
 # PREPPING CHROOT                          #
 ############################################
+
+#dis some bullshit. sudo apparently may want env vars back. the script has none, essentially.
+#env > ${PLOGS}/env_vars.pre_restore
+#eval ${env_vars}
+## and if that don't work...
+#while read line;
+#do
+#	eval ${line}
+#done < ${PLOGS}/env_vars.pre_clear
+#env > ${PLOGS}/env_vars.post_restore
 
 #Device Nodes
 sudo mkdir -p ${PUR}/{dev,proc,sys,run}
@@ -848,27 +860,31 @@ fi
 chmod +x chrootboot.sh
 chmod +x chrootboot-stage2.sh
 echo "ENTERING CHROOT"
-sudo chroot "${PUR}" /tools/bin/env -i      			\
+sudo chroot "${PUR}" ${PTLS}/bin/env -i      			\
 		HOME=/root					\
 		TERM="${TERM}"					\
 		PS1='\u:\w (chroot) \$ '			\
 		PS4="${PS4}"					\
-		PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin	\
+		PATH=/bin:/usr/bin:/sbin:/usr/sbin:${PTLS}/bin	\
 		GCCVER=${GCCVER}				\
 		VIMVER=${VIMVER}				\
-		/tools/bin/bash +h /chrootboot.sh
+		MAKEFLAGS="${MAKEFLAGS}"			\
+		${PTLS}/bin/bash +h /chrootboot.sh
 
 touch ${PUR}/chrootboot1.success
 
-sudo chroot "${PUR}" /tools/bin/env -i HOME=/root TERM=$TERM	\
-		PS1='\u:\w\$ '					\
-		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
-		/tools/bin/find /{,usr/}{bin,lib,sbin} -type f	\
-		-exec /tools/bin/strip --strip-debug '{}' ';'
+#sudo chroot "${PUR}" ${PTLS}/bin/env -i HOME=/root TERM=$TERM	\
+#		PS1='\u:\w\$ '					\
+#		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
+#		${PTLS}/bin/find /{,usr/}{bin,lib,sbin} -type f	\
+#		-exec ${PTLS}/bin/strip --strip-debug '{}' ';'
 
-touch ${PUR}/chrootboot2.success
+#touch ${PUR}/chrootboot2.success
+set +e
+sudo find ${PTLS}/{,usr}/{bin,lib,sbin} -type f -exec strib --strib-debug '{}' \;
+set -e
 
-sudo chroot "${PUR}" /tools/bin/env -i      			\
+sudo chroot "${PUR}" ${PTLS}/bin/env -i      			\
 		HOME=/root					\
 		TERM="${TERM}"					\
 		PS1='\u:\w (chroot) \$ '			\
@@ -876,7 +892,8 @@ sudo chroot "${PUR}" /tools/bin/env -i      			\
 		PATH=/bin:/usr/bin:/sbin:/usr/sbin		\
 		GCCVER=${GCCVER}				\
 		VIMVER=${VIMVER}				\
-		/tools/bin/bash +h /chrootboot-stage2.sh
+		MAKEFLAGS="${MAKEFLAGS}"			\
+		${PTLS}/bin/bash +h /chrootboot-stage2.sh
 
 touch ${PUR}/chrootboot3.success
 
