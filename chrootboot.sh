@@ -12,6 +12,8 @@ then
         set -x
 fi
 
+MAKEFLAGS_LOG=${MAKEFLAGS}
+
 PUR="/"
 PSRC="/sources"
 PTLS="/tools"
@@ -1037,8 +1039,11 @@ echo "[Groff] Configuring..."
 PAGE=letter ./configure --prefix=/usr > ${PLOGS}/groff_configure.1 2>&1
 
 echo "[Groff] Building..."
-make > ${PLOGS}/groff_make.1 2>&1
+# keeps failing..
+MAKEFLAGS=''
+make -j 1 > ${PLOGS}/groff_make.1 2>&1
 make install >> ${PLOGS}/groff_make.1 2>&1
+MAKEFLAGS=${MAKEFLAGS_LOC}
 coresrc_clean groff
 
 
@@ -1073,7 +1078,7 @@ echo "[Grub] Configuring..."
 echo "[Grub] Building..."
 make > ${PLOGS}/grub_make.1 2>&1
 make install >> ${PLOGS}/grub_make.1 2>&1
-coresrc_clean
+coresrc_clean grub
 
 
 # Less
@@ -1146,7 +1151,7 @@ do
   ln -s /bin/kmod /sbin/${target}
 done
 ln -s kmod /bin/lsmod
-coresrc_clearn kmod
+coresrc_clean kmod
 
 
 # Libpipeline
@@ -1249,6 +1254,8 @@ HAVE_BLKID=1
 BLKID_LIBS="-lblkid"
 BLKID_CFLAGS="-I${PTLS}/include"
 EOF
+# needed if building from git release tarball, but fails because xsltproc
+#./autogen.sh > ${PLOGS}/eudev_configure.1 2>&1
 ./configure --prefix=/usr	\
 	--bindir=/sbin		\
 	--sbindir=/sbin		\
@@ -1265,9 +1272,14 @@ echo "[Eudev] Building..."
 LIBRARY_PATH=${PTLS}/lib make > ${PLOGS}/eudev_make.1 2>&1
 mkdir -p /lib/udev/rules.d
 mkdir -p /etc/udev/rules.d
+# these tests.. may fail, since we're in a chroot.
+set +e
 make LD_LIBRARY_PATH=${PTLS}/lib check > ${PLOGS}/eudev_check.1 2>&1
+set -e
 make LD_LIBRARY_PATH=${PTLS}/lib install >> ${PLOGS}/eudev_make.1 2>&1
-cp -a ../udev-lfs .
+cp -a ${PSRC}/pur_src/core/udev-lfs .
+# ugh. ugly. tsk, tsk!
+find udev-lfs/ -type f -exec sed -i -e 's/-$(VERSION)//g' '{}' \;
 make -f udev-lfs/Makefile.lfs install >> ${PLOGS}/eudev_make.1 2>&1
 LD_LIBRARY_PATH=${PTLS}/lib udevadm hwdb --update >> ${PLOGS}/eudev_configure.1 2>&1
 coresrc_clean eudev
@@ -1294,7 +1306,7 @@ mkdir -p /var/lib/hwclock
 echo "[Util-Linux] Building..."
 make > ${PLOGS}/util-linux_make.1 2>&1
 make install >> ${PLOGS}/util-linux_make.1 2>&1
-coresrc_clearn util-linux
+coresrc_clean util-linux
 
 
 # Man-DB

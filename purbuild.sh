@@ -224,7 +224,8 @@ GCCVER=$(egrep '^gcc-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLVER=$(egrep '^perl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g')
 PERLMAJ=$(echo ${PERLVER} | sed -re 's/([0-9]*)\..*$/\1/g')
 TCLVER=$(egrep '^tcl-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g' | awk -F. '{print $1"."$2}')
-export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ TLCVER
+VIMVER=$(egrep '^vim-[0-9]' versions.txt | sed -re 's/[A-Za-z]*-(.*)$/\1/g' | sed -e 's/\.//g')
+export GLIBCVERS HOSTGLIBCVERS GCCVER PERLVER PERLMAJ TLCVER VIMVER
 
 # Okay, so this would take way too much time...
 #src_core_x () {
@@ -807,8 +808,8 @@ PATH=${PATH_LOC}
 # Stripping bootstrap env
 # strip throws a non-0 because some /usr/bin's are actually bash scripts, etc.
 set +e
-strip --strip-debug ${PTLS}/lib/*
-/usr/bin/strip --strip-unneeded ${PTLS}/{,s}bin/*
+strip --strip-debug ${PTLS}/lib/* > /dev/null 2>&1
+/usr/bin/strip --strip-unneeded ${PTLS}/{,s}bin/* > /dev/null 2>&1
 set -e
 rm -rf ${PTLS}/{,share}/{info,man,doc}
 
@@ -881,7 +882,7 @@ touch ${PUR}/chrootboot1.success
 
 #touch ${PUR}/chrootboot2.success
 set +e
-sudo find ${PTLS}/{,usr}/{bin,lib,sbin} -type f -exec strib --strib-debug '{}' \;
+sudo find ${PTLS}/{,usr}/{bin,lib,sbin} -type f -exec strip --strib-debug '{}' \; > /dev/null 2>&1
 set -e
 
 sudo chroot "${PUR}" ${PTLS}/bin/env -i      			\

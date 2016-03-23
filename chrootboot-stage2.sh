@@ -6,7 +6,7 @@ umask 022
 echo
 set +h
 
-set -e
+#set -e
 if [ "${PS4}" == 'Line ${LINENO}: ' ];
 then
         set -x
@@ -79,28 +79,31 @@ rm -rf /tmp/*
 echo "[NTPsec] Configuring..."
 contsrc_prep ntpsec
 # configure here
-# > ${PLOGS}/ntpsec_configure.1 2>&1
+./configure --prefix=/usr > ${PLOGS}/ntpsec_configure.1 2>&1
 echo "[NTPsec] Building..."
 # compile here
-# > ${PLOGS}/ntpsec_make.1 2>&1
+make > ${PLOGS}/ntpsec_make.1 2>&1
+make install >> ${PLOGS}/npsec_make.1 2>&1
 contsrc_clean ntpsec
 
 # LibreSSL
 echo "[LibreSSL] Configuring..."
 contsrc_prep libressl
 # configure here
-# > ${PLOGS}/libressl_configure.1 2>&1
+./configure --prefix=/usr > ${PLOGS}/libressl_configure.1 2>&1
 echo "[LibreSSL] Building..."
 # compile here
-# > ${PLOGS}/libressl_make.1 2>&1
+make > ${PLOGS}/libressl_make.1 2>&1
+make install >> ${PLOGS}/libressl_make.1 2>&1
 contsrc_clean libressl
 
 # Net-Tools
 echo "[Net-Tools] Configuring..."
 contsrc_prep net-tools
 # configure here
-# > ${PLOGS}/net-tools_configure.1 2>&1
+./configure --prefix=/usr > ${PLOGS}/net-tools_configure.1 2>&1
 echo "[Net-Tools] Building..."
 # compile here
-# > ${PLOGS}/net-tools_make.1 2>&1
+make > ${PLOGS}/net-tools_make.1 2>&1
+make install >> ${PLOGS}/net-tools_make.1 2>&1
 contsrc_clean net-tools
