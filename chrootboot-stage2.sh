@@ -6,6 +6,8 @@ umask 022
 echo
 set +h
 
+set -e
+
 #set -e
 if [ "${PS4}" == 'Line ${LINENO}: ' ];
 then
@@ -138,6 +140,27 @@ yes "" | make > ${PLOGS}/net-tools_make.1 2>&1
 make install >> ${PLOGS}/net-tools_make.1 2>&1
 contsrc_clean net-tools
 
+
+
+# zfs
+contsrc_prep zfs
+echo "[ZFS] Configuring..."
+./configure --prefix=/usr > ${PLOGS}/zfs_configure.1 2>&1
+echo "[ZFS] Building..."
+make > ${PLOGS}/zfs_make.1 2>&1
+make install >> ${PLOGS}/zfs_make.1 2>&1
+
+## We need to built the kernel BEFORE spl.
+## It wants the kernel sources, not just the headers...?
+## Anyways, make sure to not do a coresrc_clean linux after the
+## *kernel* is built.
+#cd ${PSRC}/zfs/spl
+#echo "[SPL] Configuring..."
+#./configure --prefix=/usr > ${PLOGS}/spl_configure.1 2>&1
+#echo "[SPL] Building..."
+#make > ${PLOGS}/spl_make.1 2>&1
+#make install >> ${PLOGS}/spl_make.1 2>&1
+#contsrc_clean zfs
 
 # cleanup python since we just needed it for ntpsec
 rm -rf /usr/{lib,include,bin,share/man/man1}/python*

@@ -54,8 +54,7 @@ http://ftp.gnu.org/gnu/m4/m4-1.4.17.tar.gz
 http://ftp.gnu.org/gnu/make/make-4.1.tar.gz
 http://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz
 http://www.mpfr.org/mpfr-current/mpfr-3.1.4.tar.xz
-#http://ftp.gnu.org/gnu/ncurses/ncurses-6.0.tar.gz
-https://github.com/sabotage-linux/netbsd-curses/releases/download/v0.0.3/netbsd-curses-0.0.3.tar.xz
+http://ftp.gnu.org/gnu/ncurses/ncurses-6.0.tar.gz
 http://ftp.gnu.org/gnu/patch/patch-2.7.5.tar.gz
 http://www.cpan.org/src/5.0/perl-5.22.1.tar.gz
 http://ftp.gnu.org/gnu/sed/sed-4.2.2.tar.gz
