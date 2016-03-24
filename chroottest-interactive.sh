@@ -12,17 +12,17 @@ sudo mount -t devpts devpts ${PUR}/dev/pts -o gid=5,mode=620
 sudo mount -t proc proc ${PUR}/proc
 sudo mount -t sysfs sysfs ${PUR}/sys
 sudo mount -t tmpfs tmpfs ${PUR}/run
-sudo umount -l ${PUR}/{run,sys,proc,dev} > /dev/null 2>&1
 
-sudo chroot ${PUR} /tools/bin/env -i					\
+sudo chroot ${PUR} /usr/bin/env -i					\
 	HOME=/root							\
 	TERM="$TERM"							\
 	PS1='\u:\w\$ '							\
-	PATH=/bin:/usr/bin:/sbin:/usr/sbin:${PTLS}/bin:${PTLS}/sbin	\
+	PATH=/bin:/usr/bin:/sbin:/usr/sbin				\
 	PUR="/"								\
 	PSRC="/sources"							\
 	PTLS="/tools"							\
 	PCNTRB="/contrib"						\
-	/bin/bash --login +h
+	MAKEFLAGS="${MAKEFLAGS}"					\
+	/bin/bash --login
 
 sudo umount -l ${PUR}/{run,sys,proc,dev} > /dev/null 2>&1

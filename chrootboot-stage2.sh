@@ -75,35 +75,69 @@ rm -f /usr/lib/libz.a
 rm -rf /tmp/*
 
 
-# NTPsec
-echo "[NTPsec] Configuring..."
-contsrc_prep ntpsec
-# configure here
-./configure --prefix=/usr > ${PLOGS}/ntpsec_configure.1 2>&1
-echo "[NTPsec] Building..."
-# compile here
-make > ${PLOGS}/ntpsec_make.1 2>&1
-make install >> ${PLOGS}/npsec_make.1 2>&1
-contsrc_clean ntpsec
-
 # LibreSSL
 echo "[LibreSSL] Configuring..."
 contsrc_prep libressl
 # configure here
-./configure --prefix=/usr > ${PLOGS}/libressl_configure.1 2>&1
+./configure --prefix=/usr --with-openssldir=/etc/ssl > ${PLOGS}/libressl_configure.1 2>&1
 echo "[LibreSSL] Building..."
 # compile here
 make > ${PLOGS}/libressl_make.1 2>&1
 make install >> ${PLOGS}/libressl_make.1 2>&1
 contsrc_clean libressl
 
+# python
+echo "[Python] Configuring..."
+contsrc_prep python
+./configure --prefix=/usr > ${PLOGS}/python_configure.1 2>&1
+echo "[Python] Building..."
+make > ${PLOGS}/python_make.1 2>&1
+make install >> ${PLOGS}/python_make.1 2>&1
+contsrc_clean python
+
+# libevent
+# dependency for NTPsec so it's actually usable.
+# needs to stay installed- is a runtime dep
+contsrc_prep libevent
+echo "[LibEvent] Configuring..."
+./configure --prefix=/usr > ${PLOGS}/libevent_configure.1 2>&1
+echo "[LibEvent] Building..."
+make > ${PLOGS}/libevent_make.1 2>&1
+make install >> ${PLOGS}/libevent_make.1 2>&1
+contsrc_clean libevent
+
+# NTPsec
+# note: if we remove NTPsec as a base/contrib dep,
+# we can remove python2 and libevent2 as well.
+# without python2, ntpsec does not build
+# and without libevent2:
+##  Warning libevent2 does not work
+##  This means ntpdig will not be built 
+##  While not necessary you will lose 'ntpdate' functionality.
+echo "[NTPsec] Configuring..."
+contsrc_prep ntpsec
+# configure here
+python waf configure --prefix=/usr > ${PLOGS}/ntpsec_configure.1 2>&1
+echo "[NTPsec] Building..."
+# compile here
+python waf > ${PLOGS}/ntpsec_make.1 2>&1
+python waf install >> ${PLOGS}/npsec_make.1 2>&1
+contsrc_clean ntpsec
+
+
 # Net-Tools
-echo "[Net-Tools] Configuring..."
+# stable 1.6.0 release doesn't build properly in newer gcc.
+# maybe incorporate "git archive -o repo.tar --remote=<repo url> <commit id>"?
+#echo "[Net-Tools] Configuring..."
 contsrc_prep net-tools
 # configure here
-./configure --prefix=/usr > ${PLOGS}/net-tools_configure.1 2>&1
+#./configure --prefix=/usr > ${PLOGS}/net-tools_configure.1 2>&1
 echo "[Net-Tools] Building..."
 # compile here
-make > ${PLOGS}/net-tools_make.1 2>&1
+yes "" | make > ${PLOGS}/net-tools_make.1 2>&1
 make install >> ${PLOGS}/net-tools_make.1 2>&1
 contsrc_clean net-tools
+
+
+# cleanup python since we just needed it for ntpsec
+rm -rf /usr/{lib,include,bin,share/man/man1}/python*

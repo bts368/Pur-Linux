@@ -568,21 +568,28 @@ make > ${PLOGS}/check_make.1 2>&1
 make install >> ${PLOGS}/check_make.1 2>&1
 coresrc_clean check
 
-#ncurses
-coresrc_prep ncurses
-echo "[nCurses] Configuring..."
-sed -i -e 's/mawk//' configure
-./configure --prefix=${PTLS}	\
-            --with-shared	\
-            --without-debug	\
-            --without-ada	\
-            --enable-widec	\
-            --enable-overwrite > ${PLOGS}/ncurses_configure.1 2>&1
+# netbsd-curses
+# or ncurses
+coresrc_prep netbsd-curses
+sed -i -e "s@/usr/local@${PTLS}@g" GNUmakefile
+#coresrc_prep ncurses
+#echo "[nCurses] Configuring..."
+# sed -i -e 's/mawk//' configure # used for ncurses
+#./configure --prefix=${PTLS}	\
+#            --with-shared	\
+#            --without-debug	\
+#            --without-ada	\
+#            --enable-widec	\
+#            --enable-overwrite > ${PLOGS}/ncurses_configure.1 2>&1
 
-echo "[nCurses] Building..."
-make > ${PLOGS}/ncurses_make.1 2>&1
-make install >> ${PLOGS}/ncurses_make.1 2>&1
-coresrc_clean ncurses
+#echo "[nCurses] Building..."
+echo "[NetBSD Curses] Building..."
+make all > ${PLOGS}/netbsd-curses_make.1 2>&1
+#make > ${PLOGS}/ncurses_make.1 2>&1
+make install >> ${PLOGS}/netbsd-curses_make.1 2>&1
+#make install >> ${PLOGS}/ncurses_make.1 2>&1
+#coresrc_clean ncurses
+coresrc_clean netbsd-curses
 
 #bash
 coresrc_prep bash

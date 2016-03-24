@@ -54,7 +54,8 @@ http://ftp.gnu.org/gnu/m4/m4-1.4.17.tar.gz
 http://ftp.gnu.org/gnu/make/make-4.1.tar.gz
 http://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz
 http://www.mpfr.org/mpfr-current/mpfr-3.1.4.tar.xz
-http://ftp.gnu.org/gnu/ncurses/ncurses-6.0.tar.gz
+#http://ftp.gnu.org/gnu/ncurses/ncurses-6.0.tar.gz
+https://github.com/sabotage-linux/netbsd-curses/releases/download/v0.0.3/netbsd-curses-0.0.3.tar.xz
 http://ftp.gnu.org/gnu/patch/patch-2.7.5.tar.gz
 http://www.cpan.org/src/5.0/perl-5.22.1.tar.gz
 http://ftp.gnu.org/gnu/sed/sed-4.2.2.tar.gz
@@ -68,6 +69,10 @@ http://download.savannah.gnu.org/releases/man-db/man-db-2.7.5.tar.xz
 http://www.iana.org/time-zones/repository/releases/tzdata2016a.tar.gz
 http://www.zlib.net/zlib-1.2.8.tar.xz
 # contrib #
+https://www.python.org/ftp/python/2.7.11/Python-2.7.11.tar.xz
+https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
 https://gitlab.com/NTPsec/ntpsec/repository/archive.tar.bz2?ref=master
 http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.3.2.tar.gz
-http://iweb.dl.sourceforge.net/project/net-tools/net-tools-1.60.tar.bz2
+https://sourceforge.net/code-snapshots/git/n/ne/net-tools/code.git/net-tools-code-bd8bceaed2311651710331a7f8990c3e31be9840.zip
+http://archive.zfsonlinux.org/downloads/zfsonlinux/zfs/zfs-0.6.5.6.tar.gz
+http://archive.zfsonlinux.org/downloads/zfsonlinux/spl/spl-0.6.5.6.tar.gz

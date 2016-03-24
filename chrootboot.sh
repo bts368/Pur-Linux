@@ -513,21 +513,27 @@ make install >> ${PLOGS}/pkg-config_make.1 2>&1
 coresrc_clean pkg-config
 
 
-# nCurses
-coresrc_prep ncurses
-echo "[nCurses] Configuring..."
-sed -i -e '/LIBTOOL_INSTALL/d' c++/Makefile.in
-./configure --prefix=/usr	\
-	--mandir=/usr/share/man	\
-	--with-shared		\
-	--without-debug		\
-	--without-normal	\
-	--enable-pc-files	\
-	--enable-widec > ${PLOGS}/ncurses_configure.1 2>&1
+# netbsd-curses
+# or nCurses
+coresrc_prep netbsd-curses
+set -i -e 's@/usr/local@/usr@g' GNUmakefile
+#coresrc_prep ncurses
+#echo "[nCurses] Configuring..."
+#sed -i -e '/LIBTOOL_INSTALL/d' c++/Makefile.in
+#./configure --prefix=/usr	\
+#	--mandir=/usr/share/man	\
+#	--with-shared		\
+#	--without-debug		\
+#	--without-normal	\
+#	--enable-pc-files	\
+#	--enable-widec > ${PLOGS}/ncurses_configure.1 2>&1
 
-echo "[nCurses] Building..."
-make > ${PLOGS}/ncurses_make.1 2>&1
-make install >> ${PLOGS}/ncurses_make.1 2>&1
+#echo "[nCurses] Building..."
+echo "[NetBSD Curses] Building..."
+make all > ${PLOGS}/netbsd-curses_make.1 2>&1
+#make > ${PLOGS}/ncurses_make.1 2>&1
+#make install >> ${PLOGS}/ncurses_make.1 2>&1
+make install >> ${PLOGS}/netbsd-curses_make.1 2>&1
 mv /usr/lib/libncursesw.so.6* /lib
 ln -sf /lib/$(readlink /usr/lib/libncursesw.so) /usr/lib/libncursesw.so
 for lib in ncurses form panel menu;
@@ -539,7 +545,8 @@ done
 rm -f /usr/lib/libcursesw.so
 echo "INPUT(-lncursesw)" > /usr/lib/libcursesw.so
 ln -sf libncurses.so /usr/lib/libcurses.so
-coresrc_clean ncurses
+#coresrc_clean ncurses
+coresrc_clean netbsd-curses
 
 
 # attr

@@ -24,7 +24,8 @@ mkdir -p ${PURX}
 sudo mv ${PLOGS} ${PURX}/.
 sudo mv ${PSRC} ${PURX}/.
 sudo mv ${PUR}/var/log/pur_install ${PURX}/chroot_logs
-rm ${PUR}/chrootboot*
+rm -f ${PUR}/chrootboot*
+rm -rf ${PUR}/contrib
 
 
 sudo chown -R ${ME} ${PURX}
