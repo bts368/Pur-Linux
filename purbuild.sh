@@ -74,6 +74,7 @@ purlogo
 # mpfr		|
 # libmpc	|-- must be explicitly
 # wget/curl	|   installed
+# bc		|
 #_______________|
 
 
